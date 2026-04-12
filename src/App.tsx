@@ -56,6 +56,11 @@ export default function App() {
                 <MasterScoreSheet />
               </ProtectedRoute>
             } />
+            <Route path="analytics" element={
+              <ProtectedRoute allowedRole="teacher">
+                <AiAnalytics />
+              </ProtectedRoute>
+            } />
           </Route>
           <Route path="/student" element={
             <ProtectedRoute allowedRole="student">

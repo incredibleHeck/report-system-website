@@ -1,87 +1,89 @@
-import { Student, Subject, Result } from '../types';
+import { ClassRoom, Student, SubjectResult, User } from '../types';
 
-export interface StudentPerformance {
-  student: Student;
-  average: number;
-  category: 'Gifted / High Achievers' | 'On Track' | 'Needs Intervention';
+export interface AnalyticsData {
+  subjectAverages: { name: string; average: number }[];
+  categoryDistribution: { name: string; value: number; color: string }[];
+  insights: string[];
+  bestSubject: string;
+  weakestSubject: string;
+  stats: {
+    gifted: number;
+    onTrack: number;
+    highRisk: number;
+  };
 }
 
-export function categorizeLearners(students: Student[], subjects: Subject[], results: Result[]) {
+export function generateAiInsights(
+  activeClass: ClassRoom,
+  classStudents: Student[],
+  allResults: SubjectResult[]
+): AnalyticsData {
+  const classResults = allResults.filter(r => classStudents.some(s => s.id === r.studentId));
+
   // 1. Calculate student averages and categorize
-  const studentPerformances: StudentPerformance[] = students.map(student => {
-    const studentResults = results.filter(r => r.studentId === student.id);
+  const studentStats = classStudents.map(student => {
+    const studentResults = classResults.filter(r => r.studentId === student.id);
     const totalScore = studentResults.reduce((sum, r) => sum + r.totalScore, 0);
     const average = studentResults.length > 0 ? totalScore / studentResults.length : 0;
     
-    let category: StudentPerformance['category'] = 'Needs Intervention';
-    if (average >= 75) category = 'Gifted / High Achievers';
-    else if (average >= 50) category = 'On Track';
+    let category: 'gifted' | 'onTrack' | 'highRisk' = 'highRisk';
+    if (average >= 75) category = 'gifted';
+    else if (average >= 50) category = 'onTrack';
 
     return { student, average, category };
-  }).filter(sp => results.some(r => r.studentId === sp.student.id)); // Only include students with results
-
-  // 2. Calculate category distribution for Pie Chart
-  const distribution = {
-    'Gifted / High Achievers': 0,
-    'On Track': 0,
-    'Needs Intervention': 0,
-  };
-  
-  studentPerformances.forEach(sp => {
-    distribution[sp.category]++;
   });
 
-  const pieData = [
-    { name: 'Gifted / High Achievers', value: distribution['Gifted / High Achievers'], color: '#10b981' }, // emerald-500
-    { name: 'On Track', value: distribution['On Track'], color: '#3b82f6' }, // blue-500
-    { name: 'Needs Intervention', value: distribution['Needs Intervention'], color: '#ef4444' }, // red-500
+  const stats = {
+    gifted: studentStats.filter(s => s.category === 'gifted').length,
+    onTrack: studentStats.filter(s => s.category === 'onTrack').length,
+    highRisk: studentStats.filter(s => s.category === 'highRisk').length,
+  };
+
+  // 2. Calculate subject averages
+  const subjects = Array.from(new Set(classResults.map(r => r.subjectName)));
+  const subjectAverages = subjects.map(sub => {
+    const subResults = classResults.filter(r => r.subjectName === sub);
+    const avg = subResults.reduce((sum, r) => sum + r.totalScore, 0) / (subResults.length || 1);
+    return { name: sub, average: Number(avg.toFixed(1)) };
+  }).sort((a, b) => b.average - a.average);
+
+  const bestSubject = subjectAverages.length > 0 ? subjectAverages[0].name : 'N/A';
+  const weakestSubject = subjectAverages.length > 0 ? subjectAverages[subjectAverages.length - 1].name : 'N/A';
+
+  // 3. Category Distribution for Pie Chart
+  const categoryDistribution = [
+    { name: 'Gifted / High Achievers', value: stats.gifted, color: '#10b981' }, // Emerald
+    { name: 'On Track', value: stats.onTrack, color: '#3b82f6' }, // Blue
+    { name: 'High Risk / Needs Intervention', value: stats.highRisk, color: '#ef4444' }, // Red
   ].filter(d => d.value > 0);
 
-  // 3. Calculate subject averages for Bar Chart
-  const subjectAverages = subjects.map(subject => {
-    const subjectResults = results.filter(r => r.subjectId === subject.id);
-    const totalScore = subjectResults.reduce((sum, r) => sum + r.totalScore, 0);
-    const average = subjectResults.length > 0 ? totalScore / subjectResults.length : 0;
-    return {
-      subject: subject.name,
-      code: subject.code,
-      average: Number(average.toFixed(1)),
-      needsInterventionCount: subjectResults.filter(r => r.totalScore < 50).length
-    };
-  }).filter(sa => results.some(r => r.subjectId === subjects.find(s => s.code === sa.code)?.id));
-
-  // 4. Generate Actionable AI Insights
+  // 4. Actionable AI Insights
   const insights: string[] = [];
   
-  const giftedCount = distribution['Gifted / High Achievers'];
-  if (giftedCount > 0) {
-    insights.push(`🌟 ${giftedCount} student(s) are performing exceptionally well (75%+ average). Consider advanced placement or enrichment activities.`);
+  if (stats.highRisk > 0) {
+    insights.push(`AI Alert: ${stats.highRisk} student(s) in ${activeClass.name} are showing severe gaps and require immediate intervention (below 50% avg).`);
   }
 
-  const interventionCount = distribution['Needs Intervention'];
-  if (interventionCount > 0) {
-    insights.push(`⚠️ ${interventionCount} student(s) require immediate academic intervention (below 50% average).`);
+  if (subjectAverages.length > 0 && subjectAverages[subjectAverages.length - 1].average < 50) {
+    insights.push(`Subject Alert: ${weakestSubject} is currently the weakest subject. Consider a dedicated review session for this subject.`);
   }
 
-  subjectAverages.forEach(sa => {
-    if (sa.needsInterventionCount > 0) {
-      insights.push(`📊 ${sa.needsInterventionCount} student(s) need intervention in ${sa.subject} (scored below 50%).`);
-    }
-    if (sa.average < 50 && sa.average > 0) {
-      insights.push(`📉 School-wide average for ${sa.subject} is critically low (${sa.average}%). Review teaching methodologies for this subject.`);
-    }
-  });
+  if (stats.gifted > 0) {
+    insights.push(`Performance Note: ${stats.gifted} student(s) are excelling in ${bestSubject}. Consider them for the school's peer-to-peer tutoring program.`);
+  }
 
-  if (insights.length === 0 && studentPerformances.length > 0) {
-    insights.push("✅ All students are on track. Keep up the good work!");
-  } else if (studentPerformances.length === 0) {
-    insights.push("ℹ️ No data available to generate insights. Please add student results.");
+  if (classResults.length > 0) {
+    insights.push(`Data Insight: The overall class performance is driven by strong results in ${bestSubject}. Let's replicate those teaching strategies in other areas.`);
+  } else {
+    insights.push("Data Insight: No results have been recorded for this class yet. Start entering marks to see AI analytics.");
   }
 
   return {
-    studentPerformances,
-    pieData,
     subjectAverages,
-    insights
+    categoryDistribution,
+    insights,
+    bestSubject,
+    weakestSubject,
+    stats
   };
 }
