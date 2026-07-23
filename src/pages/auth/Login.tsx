@@ -1,105 +1,129 @@
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, Shield, Users, BookOpen } from 'lucide-react';
+import { Shield, Users, BookOpen, Database } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
-  const { users, students } = useDatabase();
+  const { users, students, schools, seedDemoData } = useDatabase();
   const navigate = useNavigate();
 
   const handleLogin = (role: 'headteacher' | 'teacher' | 'student') => {
     let userToLogin;
 
     if (role === 'headteacher') {
-      // Use a stable ID so the registered school persists across logins
-      userToLogin = {
+      const existing = users.find((u) => u.role === 'headteacher');
+      userToLogin = existing || {
         id: 'demo-headteacher-id',
         name: 'Demo Headteacher',
-        role: 'headteacher',
-        schoolId: 'demo-school-id'
+        role: 'headteacher' as const,
+        schoolId: schools[0]?.id || 'demo-school-id',
       };
     } else if (role === 'teacher') {
-      // Try to log in as the first created teacher, otherwise use a fallback
-      const existingTeacher = users.find(u => u.role === 'teacher');
-      if (existingTeacher) {
-        userToLogin = existingTeacher;
-      } else {
-        userToLogin = {
-          id: 'demo-teacher-id',
-          name: 'Demo Teacher',
-          role: 'teacher',
-          schoolId: 'demo-school-id'
-        };
-      }
-    } else if (role === 'student') {
-      // Try to log in as the first created student, otherwise use a fallback
-      const existingStudent = students[0];
-      if (existingStudent) {
-        userToLogin = {
-          id: existingStudent.id,
-          name: existingStudent.name,
-          role: 'student',
-          schoolId: existingStudent.schoolId
-        };
-      } else {
-        userToLogin = {
-          id: 'demo-student-id',
-          name: 'Demo Student',
-          role: 'student',
-          schoolId: 'demo-school-id'
-        };
-      }
+      const existingTeacher = users.find((u) => u.role === 'teacher');
+      userToLogin = existingTeacher || {
+        id: 'demo-teacher-id',
+        name: 'Demo Teacher',
+        role: 'teacher' as const,
+        schoolId: schools[0]?.id || 'demo-school-id',
+      };
+    } else {
+      const existingStudent =
+        students.find((s) => s.studentKey === 'SAIS-2023-0042') || students[0];
+      userToLogin = existingStudent
+        ? {
+            id: existingStudent.id,
+            name: existingStudent.name,
+            role: 'student' as const,
+            schoolId: existingStudent.schoolId,
+            linkedStudentId: existingStudent.id,
+            studentKey: existingStudent.studentKey,
+          }
+        : {
+            id: 'demo-student-id',
+            name: 'Demo Student',
+            role: 'student' as const,
+            schoolId: 'demo-school-id',
+          };
     }
 
-    if (userToLogin) {
-      login(userToLogin as any);
-      navigate(`/${role}`);
-    }
+    login(userToLogin);
+    navigate(`/${role}`);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
+    <div className="min-h-screen bg-sais-black flex flex-col justify-center py-12 px-4 relative overflow-hidden">
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.08]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 20% 20%, #d82227 0%, transparent 45%), radial-gradient(circle at 80% 80%, #713f29 0%, transparent 40%)',
+        }}
+      />
+
+      <div className="relative sm:mx-auto sm:w-full sm:max-w-md text-center">
         <div className="flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-indigo-600 shadow-lg">
-            <GraduationCap className="h-10 w-10 text-white" />
-          </div>
+          <img
+            src="/sais-logo.png"
+            alt="St. Adelaide International Schools"
+            className="h-28 w-28 object-contain drop-shadow-lg"
+          />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          EduManage GH
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Select your portal to continue
+        <h1 className="mt-5 text-3xl font-bold tracking-tight text-white font-display">
+          SAIS HecTech
+        </h1>
+        <p className="mt-2 text-sm text-white/60">
+          St. Adelaide International Schools — Report Card System
+        </p>
+        <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-sais-brown-light">
+          May we be a shining light to the nations
         </p>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 space-y-4">
-          <button
-            onClick={() => handleLogin('headteacher')}
-            className="group relative flex w-full items-center justify-center gap-3 rounded-xl border border-transparent bg-indigo-600 px-4 py-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-          >
-            <Shield className="h-5 w-5 text-indigo-200 group-hover:text-white transition-colors" />
-            Headteacher Portal
-          </button>
-          
-          <button
-            onClick={() => handleLogin('teacher')}
-            className="group relative flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-          >
-            <Users className="h-5 w-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
-            Teacher Portal
-          </button>
-          
-          <button
-            onClick={() => handleLogin('student')}
-            className="group relative flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-indigo-300 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all"
-          >
-            <BookOpen className="h-5 w-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
-            Student Portal
-          </button>
-        </div>
+      <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md space-y-3">
+        <button
+          onClick={() => handleLogin('headteacher')}
+          className="w-full flex items-center gap-3 rounded-xl bg-sais-ink border border-white/10 px-4 py-4 text-left hover:border-sais-red/60 transition"
+        >
+          <Shield className="h-6 w-6 text-sais-red" />
+          <div>
+            <p className="font-semibold text-white">Headteacher Portal</p>
+            <p className="text-xs text-white/45">Campuses, teachers, Primary/Secondary classes</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => handleLogin('teacher')}
+          className="w-full flex items-center gap-3 rounded-xl bg-sais-ink border border-white/10 px-4 py-4 text-left hover:border-sais-brown/60 transition"
+        >
+          <BookOpen className="h-6 w-6 text-sais-brown-light" />
+          <div>
+            <p className="font-semibold text-white">Teacher Portal</p>
+            <p className="text-xs text-white/45">Marks, AI comments, PDFs, delivery</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => handleLogin('student')}
+          className="w-full flex items-center gap-3 rounded-xl bg-sais-ink border border-white/10 px-4 py-4 text-left hover:border-sais-red/40 transition"
+        >
+          <Users className="h-6 w-6 text-sais-red" />
+          <div>
+            <p className="font-semibold text-white">Student Portal</p>
+            <p className="text-xs text-white/45">View finalized report cards & transcript</p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => {
+            seedDemoData();
+            alert('Demo Primary + Secondary classes seeded. Log in as Teacher.');
+          }}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-sais-brown/40 px-4 py-3 text-sm text-sais-brown-light hover:border-sais-red/50 hover:text-sais-red transition"
+        >
+          <Database className="h-4 w-4" />
+          Load SAIS Demo Data
+        </button>
       </div>
     </div>
   );

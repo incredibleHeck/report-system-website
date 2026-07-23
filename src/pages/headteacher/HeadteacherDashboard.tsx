@@ -1,289 +1,365 @@
-import React, { useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
-import { UserPlus, BookOpen, User as UserIcon, Plus, Trash2, Save, GraduationCap } from 'lucide-react';
-import { SubjectAssignment } from '../../types';
+import { getSubjectsForProgramme, getSubjectsForTerm } from '../../lib/programmeSchemas';
+import type { Programme } from '../../types';
 
 export default function HeadteacherDashboard() {
   const { currentUser } = useAuth();
-  const { users, classes, addTeacher, createClass } = useDatabase();
+  const {
+    schools,
+    users,
+    classes,
+    registerSchool,
+    updateSchool,
+    addTeacher,
+    createClass,
+    assignSubjectTeacher,
+    setFormTeacher,
+    updateClassSettings,
+    seedDemoData,
+  } = useDatabase();
 
-  // Staff Management State
+  const school =
+    schools.find((s) => s.headteacherId === currentUser?.id) ||
+    schools.find((s) => s.id === currentUser?.schoolId) ||
+    schools[0];
+
+  const [schoolName, setSchoolName] = useState(school?.name || 'St. Adelaide International Schools');
   const [teacherName, setTeacherName] = useState('');
-
-  // Class Management State
   const [className, setClassName] = useState('');
+  const [programme, setProgramme] = useState<Programme>('PRIMARY');
   const [formTeacherId, setFormTeacherId] = useState('');
-  const [subjectAssignments, setSubjectAssignments] = useState<SubjectAssignment[]>([
-    { subjectName: '', teacherId: '' }
-  ]);
+  const [manageClassId, setManageClassId] = useState('');
+  const [subjectCode, setSubjectCode] = useState('');
+  const [subjectTeacherId, setSubjectTeacherId] = useState('');
 
-  if (!currentUser) return null;
+  const teachers = users.filter(
+    (u) => u.role === 'teacher' && (!school || u.schoolId === school.id)
+  );
 
-  const teachers = users.filter(u => u.role === 'teacher' && u.schoolId === currentUser.schoolId);
+  const managedClass = classes.find((c) => c.id === manageClassId) || classes[0] || null;
+  const manageSubjects = managedClass
+    ? getSubjectsForTerm(managedClass.programme, managedClass.settings.termYearInfo)
+    : [];
 
-  const handleAddTeacher = (e: React.FormEvent) => {
+  const ensureSchool = () => {
+    if (school) {
+      updateSchool(school.id, { name: schoolName, headteacherId: currentUser!.id });
+      return school.id;
+    }
+    return registerSchool({
+      name: schoolName,
+      headteacherId: currentUser!.id,
+      address: 'P. O. Box DS 75, Dansoman – Accra',
+      website: 'www.saintadelaideschools.org',
+      email: 'info@saintadelaideschools.org, st.adelaideschools@gmail.com',
+      tel: '020 798 8167 / 027 064 0112 / 024 597 0186',
+    });
+  };
+
+  const handleAddTeacher = (e: FormEvent) => {
     e.preventDefault();
     if (!teacherName.trim()) return;
-    addTeacher({
-      name: teacherName,
-      schoolId: currentUser.schoolId,
-    });
+    const schoolId = ensureSchool();
+    addTeacher({ name: teacherName.trim(), schoolId });
     setTeacherName('');
   };
 
-  const handleAddSubject = () => {
-    setSubjectAssignments([...subjectAssignments, { subjectName: '', teacherId: '' }]);
-  };
-
-  const handleRemoveSubject = (index: number) => {
-    setSubjectAssignments(subjectAssignments.filter((_, i) => i !== index));
-  };
-
-  const handleSubjectChange = (index: number, field: keyof SubjectAssignment, value: string) => {
-    const newAssignments = [...subjectAssignments];
-    newAssignments[index] = { ...newAssignments[index], [field]: value };
-    setSubjectAssignments(newAssignments);
-  };
-
-  const handleCreateClass = (e: React.FormEvent) => {
+  const handleCreateClass = (e: FormEvent) => {
     e.preventDefault();
-    if (!className || !formTeacherId) return;
-
-    // Filter out incomplete assignments
-    const validAssignments = subjectAssignments.filter(sa => sa.subjectName && sa.teacherId);
-
-    createClass({
-      name: className,
+    if (!className.trim() || !formTeacherId) return;
+    const schoolId = ensureSchool();
+    const classId = createClass({
+      name: className.trim().toUpperCase(),
+      schoolId,
+      programme,
       teacherId: formTeacherId,
-      schoolId: currentUser.schoolId,
-      subjectTeachers: validAssignments
+      settings: {
+        teacherName: teachers.find((t) => t.id === formTeacherId)?.name || '',
+      },
     });
-
-    // Reset form
+    for (const sub of getSubjectsForProgramme(programme)) {
+      assignSubjectTeacher(classId, sub.code, formTeacherId);
+    }
     setClassName('');
-    setFormTeacherId('');
-    setSubjectAssignments([{ subjectName: '', teacherId: '' }]);
+    setManageClassId(classId);
+  };
+
+  const handleFormTeacherChange = (classId: string, teacherId: string) => {
+    if (!teacherId) return;
+    setFormTeacher(classId, teacherId);
+    const name = teachers.find((t) => t.id === teacherId)?.name;
+    if (name) updateClassSettings(classId, { teacherName: name });
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Headteacher Dashboard</h1>
-        <p className="text-gray-500">Manage your school's staff and classrooms.</p>
+    <div className="space-y-8">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Headteacher Dashboard</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Register school, teachers, and Primary/Secondary class streams
+          </p>
+        </div>
+        <button
+          onClick={() => seedDemoData()}
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800"
+        >
+          Seed Demo Classes
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Staff Management */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <UserPlus className="h-5 w-5" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-800">Staff Management</h2>
-          </div>
-          <div className="p-6 space-y-6">
-            <form onSubmit={handleAddTeacher} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Teacher Name
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={teacherName}
-                    onChange={(e) => setTeacherName(e.target.value)}
-                    placeholder="Enter full name"
-                    className="flex-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm h-10 border px-3"
-                  />
-                  <button
-                    type="submit"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">Current Staff</h3>
-              <div className="grid grid-cols-1 gap-2 max-h-60 overflow-y-auto pr-2">
-                {teachers.length === 0 ? (
-                  <p className="text-sm text-gray-400 italic py-4 text-center bg-gray-50 rounded-lg">No teachers added yet.</p>
-                ) : (
-                  teachers.map((teacher) => (
-                    <div key={teacher.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg group hover:bg-indigo-50/50 transition-colors">
-                      <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center text-xs font-bold text-indigo-600 border border-gray-200">
-                        {teacher.name.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">{teacher.name}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+      <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+        <h2 className="font-semibold text-slate-900">School</h2>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            value={schoolName}
+            onChange={(e) => setSchoolName(e.target.value)}
+            placeholder="School name"
+          />
+          <button
+            onClick={() => ensureSchool()}
+            className="rounded-lg bg-sais-red text-white px-4 py-2 text-sm"
+          >
+            Save School
+          </button>
         </div>
+        {school && (
+          <p className="text-xs text-slate-500">
+            Active school id: {school.id} ·{' '}
+            {classes.filter((c) => c.schoolId === school.id).length} classes
+          </p>
+        )}
+      </section>
 
-        {/* Class Management */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-              <BookOpen className="h-5 w-5" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-800">Class Management</h2>
-          </div>
-          <div className="p-6">
-            <form onSubmit={handleCreateClass} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-2 gap-6">
+        <section className="bg-white rounded-xl border border-slate-200 p-5">
+          <h2 className="font-semibold mb-3">Add Teacher</h2>
+          <form onSubmit={handleAddTeacher} className="flex gap-2">
+            <input
+              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={teacherName}
+              onChange={(e) => setTeacherName(e.target.value)}
+              placeholder="Teacher full name"
+            />
+            <button type="submit" className="rounded-lg bg-sais-brown text-white px-4 py-2 text-sm">
+              Add
+            </button>
+          </form>
+          <ul className="mt-4 space-y-1 text-sm">
+            {teachers.map((t) => (
+              <li key={t.id} className="flex justify-between border-b border-slate-100 py-2">
+                <span>{t.name}</span>
+                <span className="text-slate-400 text-xs font-mono">{t.id.slice(0, 8)}</span>
+              </li>
+            ))}
+            {!teachers.length && <li className="text-slate-400">No teachers yet</li>}
+          </ul>
+        </section>
+
+        <section className="bg-white rounded-xl border border-slate-200 p-5">
+          <h2 className="font-semibold mb-3">Create Class Stream</h2>
+          <form onSubmit={handleCreateClass} className="space-y-3">
+            <input
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={className}
+              onChange={(e) => setClassName(e.target.value)}
+              placeholder="e.g. YEAR FIVE (A)"
+            />
+            <select
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={programme}
+              onChange={(e) => setProgramme(e.target.value as Programme)}
+            >
+              <option value="PRIMARY">PRIMARY</option>
+              <option value="SECONDARY">SECONDARY</option>
+            </select>
+            <select
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={formTeacherId}
+              onChange={(e) => setFormTeacherId(e.target.value)}
+              required
+            >
+              <option value="">Select form teacher</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="w-full rounded-lg bg-sais-red text-white px-4 py-2 text-sm">
+              Create Class
+            </button>
+          </form>
+        </section>
+      </div>
+
+      <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold">Assign / reassign teachers</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Changes cascade into active-year enrollments so both outgoing and incoming teachers keep
+            transcript access.
+          </p>
+        </div>
+        {!classes.length ? (
+          <p className="text-sm text-slate-400">Create or seed a class first.</p>
+        ) : (
+          <>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Class</label>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                  value={managedClass?.id || ''}
+                  onChange={(e) => {
+                    setManageClassId(e.target.value);
+                    setSubjectCode('');
+                  }}
+                >
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.programme})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {managedClass && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Class Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={className}
-                    onChange={(e) => setClassName(e.target.value)}
-                    placeholder="e.g. Year 5A"
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm h-10 border px-3"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Form Teacher
-                  </label>
+                  <label className="block text-xs text-slate-500 mb-1">Form teacher</label>
                   <select
-                    required
-                    value={formTeacherId}
-                    onChange={(e) => setFormTeacherId(e.target.value)}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm h-10 border px-3 bg-white"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={managedClass.teacherId}
+                    onChange={(e) => handleFormTeacherChange(managedClass.id, e.target.value)}
                   >
-                    <option value="">Select a teacher</option>
                     {teachers.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
                     ))}
                   </select>
                 </div>
-              </div>
+              )}
+            </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-gray-700">Subject Teachers</h3>
-                  <button
-                    type="button"
-                    onClick={handleAddSubject}
-                    className="text-xs font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1 transition-colors"
+            {managedClass && (
+              <form
+                className="grid sm:grid-cols-3 gap-2 items-end"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!subjectCode || !subjectTeacherId) return;
+                  assignSubjectTeacher(managedClass.id, subjectCode, subjectTeacherId);
+                  setSubjectCode('');
+                  setSubjectTeacherId('');
+                }}
+              >
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Subject</label>
+                  <select
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={subjectCode}
+                    onChange={(e) => setSubjectCode(e.target.value)}
+                    required
                   >
-                    <Plus className="h-3 w-3" />
-                    Add Subject
-                  </button>
+                    <option value="">Select subject</option>
+                    {manageSubjects.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-
-                <div className="space-y-3">
-                  {subjectAssignments.map((assignment, index) => (
-                    <div key={index} className="flex gap-2 items-end group">
-                      <div className="flex-1">
-                        {index === 0 && <label className="block text-xs font-medium text-gray-500 mb-1">Subject</label>}
-                        <input
-                          type="text"
-                          value={assignment.subjectName}
-                          onChange={(e) => handleSubjectChange(index, 'subjectName', e.target.value)}
-                          placeholder="e.g. Mathematics"
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm h-10 border px-3"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        {index === 0 && <label className="block text-xs font-medium text-gray-500 mb-1">Teacher</label>}
-                        <select
-                          value={assignment.teacherId}
-                          onChange={(e) => handleSubjectChange(index, 'teacherId', e.target.value)}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm h-10 border px-3 bg-white"
-                        >
-                          <option value="">Select teacher</option>
-                          {teachers.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSubject(index)}
-                        disabled={subjectAssignments.length === 1}
-                        className="p-2.5 text-gray-400 hover:text-red-600 disabled:opacity-0 transition-colors"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </div>
-                  ))}
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Subject teacher</label>
+                  <select
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    value={subjectTeacherId}
+                    onChange={(e) => setSubjectTeacherId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select teacher</option>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
-
-              <div className="pt-4">
                 <button
                   type="submit"
-                  className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all active:scale-[0.98]"
+                  className="rounded-lg bg-sais-red text-white px-3 py-2 text-sm"
                 >
-                  <Save className="h-4 w-4" />
-                  Save Class Configuration
+                  Assign subject
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      {/* Summary View */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex items-center gap-3">
-          <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
-            <GraduationCap className="h-5 w-5" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-800">Class Overview</h2>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {classes.filter(c => c.schoolId === currentUser.schoolId).length === 0 ? (
-              <p className="col-span-full text-center py-12 text-gray-400 italic bg-gray-50 rounded-xl">No classes configured yet.</p>
-            ) : (
-              classes
-                .filter(c => c.schoolId === currentUser.schoolId)
-                .map((cls) => {
-                  const formTeacher = users.find(u => u.id === cls.teacherId);
-                  return (
-                    <div key={cls.id} className="group border border-gray-200 rounded-xl p-5 hover:border-amber-300 hover:shadow-md transition-all">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-bold text-gray-900 text-lg">{cls.name}</h4>
-                        <span className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider rounded">Class</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-4 flex items-center gap-2">
-                        <UserIcon className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium">Form Teacher:</span> {formTeacher?.name || 'Unknown'}
-                      </p>
-                      <div className="space-y-2 border-t border-gray-100 pt-4">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Subject Assignments</p>
-                        {cls.subjectTeachers?.map((st, i) => {
-                          const t = users.find(u => u.id === st.teacherId);
-                          return (
-                            <div key={i} className="flex justify-between items-center text-xs p-2 bg-gray-50 rounded-md">
-                              <span className="text-gray-500 font-medium">{st.subjectName}</span>
-                              <span className="font-bold text-gray-700">{t?.name || 'Unknown'}</span>
-                            </div>
-                          );
-                        })}
-                        {(!cls.subjectTeachers || cls.subjectTeachers.length === 0) && (
-                          <p className="text-xs text-gray-400 italic">No subjects assigned</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
+              </form>
             )}
-          </div>
+
+            {managedClass && (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 border-b">
+                      <th className="py-2 pr-3">Subject</th>
+                      <th className="py-2">Teacher</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manageSubjects.map((s) => {
+                      const asg = managedClass.subjectTeachers.find(
+                        (st) => st.subjectCode === s.code
+                      );
+                      return (
+                        <tr key={s.code} className="border-b border-slate-100">
+                          <td className="py-2 pr-3">{s.name}</td>
+                          <td className="py-2">
+                            {users.find((u) => u.id === asg?.teacherId)?.name || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <section className="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 className="font-semibold mb-3">Classes</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left text-slate-500 border-b">
+                <th className="py-2 pr-4">Class</th>
+                <th className="py-2 pr-4">Programme</th>
+                <th className="py-2 pr-4">Form Teacher</th>
+                <th className="py-2">Subjects</th>
+              </tr>
+            </thead>
+            <tbody>
+              {classes.map((c) => (
+                <tr key={c.id} className="border-b border-slate-100">
+                  <td className="py-2 pr-4 font-medium">{c.name}</td>
+                  <td className="py-2 pr-4">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">
+                      {c.programme}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4">
+                    {users.find((u) => u.id === c.teacherId)?.name || '—'}
+                  </td>
+                  <td className="py-2 text-slate-500">
+                    {getSubjectsForTerm(c.programme, c.settings.termYearInfo).length} subjects
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

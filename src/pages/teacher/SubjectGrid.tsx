@@ -1,262 +1,377 @@
-import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import { useDatabase } from '../../context/DatabaseContext';
-import { calculateGrade } from '../../lib/grading';
-import { Save, AlertCircle, TableProperties, ChevronLeft, CheckCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useActiveClass, useDatabase, termKeyFromSettings } from '../../context/DatabaseContext';
+import { parseAcademicYear } from '../../lib/academicYear';
+import { getSubjectByCode } from '../../lib/programmeSchemas';
+import { scaleRawEotComponents } from '../../lib/grading';
+import { RAW_SCORE_MAX, SCORE_FIELD_MAX } from '../../lib/scoreValidation';
+import type { AssessmentScore, MtEntryMode } from '../../types';
+import StudentScoreRow, {
+  type EotRowCommit,
+  type SimpleRowCommit,
+} from './StudentScoreRow';
 
-type StudentMarks = {
-  cw: string;
-  mt: string;
-  eot: string;
+type CommittedRow = {
+  studentId: string;
+  useRaw: boolean;
+  cwRaw: [number | null, number | null, number | null, number | null, number | null];
+  mtRawSplit: [number | null, number | null, number | null];
+  mtRawSingle: number | null;
+  examRaw: number | null;
+  cwScore: number;
+  mtScore: number;
+  eotScore: number;
+  totalScore: number;
+  grade: string;
   comment: string;
 };
 
+function emptyCommit(studentId: string, existing?: AssessmentScore): CommittedRow {
+  return {
+    studentId,
+    useRaw: false,
+    cwRaw: [null, null, null, null, null],
+    mtRawSplit: [null, null, null],
+    mtRawSingle: null,
+    examRaw: null,
+    cwScore: existing?.cwScore ?? 0,
+    mtScore: existing?.mtScore ?? 0,
+    eotScore: existing?.eotScore ?? 0,
+    totalScore: existing?.totalScore ?? 0,
+    grade: existing?.grade ?? '',
+    comment: existing?.comment ?? '',
+  };
+}
+
 export default function SubjectGrid() {
-  const { currentUser } = useAuth();
-  const { classes, students, saveSubjectResults, results } = useDatabase();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { code = '' } = useParams();
+  const { activeClass, classStudents } = useActiveClass();
+  const { scores, upsertScores, subjectContexts, saveSubjectContext } = useDatabase();
+  const [mode, setMode] = useState<'EOT' | 'MIDTERM'>('EOT');
+  const [mtEntryMode, setMtEntryMode] = useState<MtEntryMode>('split');
+  const [ctxGrade, setCtxGrade] = useState('');
+  const [ctxTopics, setCtxTopics] = useState('');
+  const [showCtx, setShowCtx] = useState(false);
+  const [highlight, setHighlight] = useState<Set<string>>(new Set());
+  const [committed, setCommitted] = useState<Record<string, CommittedRow>>({});
 
-  // 1. Get routing params (classId and subjectName)
-  const state = location.state as { classId?: string; subjectName?: string } | null;
-
-  const [selectedClassId, setSelectedClassId] = useState(state?.classId || '');
-  const [selectedSubject, setSelectedSubject] = useState(state?.subjectName || '');
-  const [marks, setMarks] = useState<Record<string, StudentMarks>>({});
-  const [isSaving, setIsSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
-
-  const activeClass = classes.find(c => c.id === selectedClassId);
-  const classStudents = students.filter(s => s.classId === selectedClassId);
-
-  // 2. Pre-fill if results already exist
-  useEffect(() => {
-    if (selectedClassId && selectedSubject) {
-      const existingMarks: Record<string, StudentMarks> = {};
-      classStudents.forEach(student => {
-        const result = results.find(r => r.studentId === student.id && r.subjectName === selectedSubject);
-        if (result) {
-          existingMarks[student.id] = {
-            cw: result.cwScore.toString(),
-            mt: result.mtScore.toString(),
-            eot: result.eotScore.toString(),
-            comment: result.comment || ''
-          };
-        }
-      });
-      setMarks(existingMarks);
-    }
-  }, [selectedClassId, selectedSubject]);
-
-  const handleMarkChange = (studentId: string, field: keyof StudentMarks, value: string) => {
-    // Basic validation: ensure it's a number and within range (optional here, but good for UI)
-    setMarks(prev => ({
-      ...prev,
-      [studentId]: {
-        ...(prev[studentId] || { cw: '', mt: '', eot: '', comment: '' }),
-        [field]: value
+  const subject = activeClass ? getSubjectByCode(activeClass.programme, code) : undefined;
+  const termKey = activeClass ? termKeyFromSettings(activeClass.settings) : 'DEFAULT';
+  const existing = useMemo(() => {
+    const map = new Map<string, AssessmentScore>();
+    if (!activeClass) return map;
+    for (const s of scores) {
+      if (
+        s.classId === activeClass.id &&
+        s.subjectCode === code &&
+        s.mode === mode &&
+        s.termKey === termKey
+      ) {
+        map.set(s.studentId, s);
       }
-    }));
-  };
-
-  const handleSave = async () => {
-    if (!selectedClassId || !selectedSubject) return;
-    setIsSaving(true);
-
-    try {
-      classStudents.forEach(student => {
-        const studentMark = marks[student.id];
-        // Only save if some data exists
-        if (studentMark && (studentMark.cw || studentMark.mt || studentMark.eot || studentMark.comment)) {
-          const cwScore = Number(studentMark.cw) || 0;
-          const mtScore = Number(studentMark.mt) || 0;
-          const eotScore = Number(studentMark.eot) || 0;
-          
-          const { totalScore, grade, comment: autoComment } = calculateGrade(cwScore, mtScore, eotScore);
-          
-          saveSubjectResults({
-            studentId: student.id,
-            subjectName: selectedSubject,
-            cwScore,
-            mtScore,
-            eotScore,
-            totalScore,
-            grade,
-            comment: studentMark.comment || autoComment
-          });
-        }
-      });
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } finally {
-      setIsSaving(false);
     }
+    return map;
+  }, [scores, activeClass, code, mode, termKey]);
+
+  useEffect(() => {
+    if (!activeClass) return;
+    const next: Record<string, CommittedRow> = {};
+    let inferredMode: MtEntryMode | null = null;
+    for (const st of classStudents) {
+      const hit = existing.get(st.id);
+      next[st.id] = emptyCommit(st.id, hit);
+      if (hit?.mtEntryMode && !inferredMode) inferredMode = hit.mtEntryMode;
+      if (hit && (hit.cwRaw || hit.examRaw != null || hit.mtRawSingle != null || hit.mtRawSplit)) {
+        next[st.id] = {
+          studentId: st.id,
+          useRaw: true,
+          cwRaw: hit.cwRaw ?? [null, null, null, null, null],
+          mtRawSplit: hit.mtRawSplit ?? [null, null, null],
+          mtRawSingle: hit.mtRawSingle ?? null,
+          examRaw: hit.examRaw ?? null,
+          cwScore: hit.cwScore ?? 0,
+          mtScore: hit.mtScore ?? 0,
+          eotScore: hit.eotScore ?? 0,
+          totalScore: hit.totalScore,
+          grade: hit.grade,
+          comment: hit.comment ?? '',
+        };
+      } else if (hit) {
+        next[st.id] = {
+          ...emptyCommit(st.id, hit),
+          totalScore: hit.totalScore,
+          grade: hit.grade,
+          comment: hit.comment ?? '',
+        };
+      }
+    }
+    setCommitted(next);
+    if (inferredMode) setMtEntryMode(inferredMode);
+    setHighlight(new Set());
+    const ctx = subjectContexts.find(
+      (c) => c.classId === activeClass.id && c.subjectCode === code
+    );
+    setCtxGrade(ctx?.gradeBand || '');
+    setCtxTopics(ctx?.topics.join(', ') || '');
+  }, [activeClass?.id, code, mode, classStudents.length, existing.size]);
+
+  const onCommitEot = useCallback((row: EotRowCommit) => {
+    setCommitted((prev) => ({ ...prev, [row.studentId]: row }));
+  }, []);
+
+  const onCommitSimple = useCallback((row: SimpleRowCommit) => {
+    setCommitted((prev) => ({
+      ...prev,
+      [row.studentId]: {
+        ...(prev[row.studentId] ?? emptyCommit(row.studentId)),
+        studentId: row.studentId,
+        totalScore: row.totalScore,
+        grade: row.grade,
+        comment: row.comment,
+      },
+    }));
+  }, []);
+
+  if (!activeClass || !subject) {
+    return <p className="text-slate-500">Subject not found for active class.</p>;
+  }
+
+  const saveAll = () => {
+    const payload: Omit<AssessmentScore, 'id'>[] = classStudents.map((st) => {
+      const r = committed[st.id] ?? emptyCommit(st.id, existing.get(st.id));
+      const academicYear = parseAcademicYear(activeClass.settings.termYearInfo);
+
+      if (subject.kind === 'commentOnly') {
+        return {
+          studentId: st.id,
+          classId: activeClass.id,
+          subjectCode: code,
+          mode,
+          termKey,
+          academicYear,
+          totalScore: 0,
+          grade: '',
+          comment: r.comment || '',
+        };
+      }
+
+      if (subject.kind === 'scoreOnly' || mode === 'MIDTERM') {
+        return {
+          studentId: st.id,
+          classId: activeClass.id,
+          subjectCode: code,
+          mode,
+          termKey,
+          academicYear,
+          totalScore: r.totalScore,
+          grade: r.grade,
+          comment: r.comment || '',
+        };
+      }
+
+      // EOT scored: force header mtEntryMode onto every row; re-scale raw with that mode
+      if (!r.useRaw) {
+        return {
+          studentId: st.id,
+          classId: activeClass.id,
+          subjectCode: code,
+          mode,
+          termKey,
+          academicYear,
+          mtEntryMode,
+          cwScore: r.cwScore,
+          mtScore: r.mtScore,
+          eotScore: r.eotScore,
+          totalScore: r.totalScore,
+          grade: r.grade,
+          comment: r.comment || '',
+        };
+      }
+
+      const scaled = scaleRawEotComponents({
+        cwRaw: r.cwRaw,
+        mtEntryMode,
+        mtRawSplit: r.mtRawSplit,
+        mtRawSingle: r.mtRawSingle,
+        examRaw: r.examRaw,
+      });
+
+      return {
+        studentId: st.id,
+        classId: activeClass.id,
+        subjectCode: code,
+        mode,
+        termKey,
+        academicYear,
+        mtEntryMode,
+        cwRaw: scaled.cwRaw,
+        mtRawSplit: mtEntryMode === 'split' ? scaled.mtRawSplit : [null, null, null],
+        mtRawSingle: mtEntryMode === 'single' ? scaled.mtRawSingle : null,
+        examRaw: scaled.examRaw,
+        cwScore: scaled.cwExact,
+        mtScore: scaled.mtExact,
+        eotScore: scaled.eotExact,
+        totalScore: scaled.totalScore,
+        grade: scaled.grade,
+        comment: r.comment || '',
+      };
+    });
+    upsertScores(payload);
+    setHighlight(new Set(classStudents.map((s) => s.id)));
+    alert('Scores saved (upserted)');
   };
 
-  if (!currentUser) return null;
+  const saveContext = () => {
+    saveSubjectContext({
+      classId: activeClass.id,
+      subjectCode: code,
+      gradeBand: ctxGrade,
+      topics: ctxTopics
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+    });
+    setShowCtx(false);
+  };
+
+  const isEotScored = subject.kind === 'scored' && mode === 'EOT';
+  const mtColSpan = mtEntryMode === 'split' ? 3 : 1;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-20">
-      {/* Header Area */}
-      <div className="flex flex-col gap-4">
-        <button 
-          onClick={() => navigate('/teacher')}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-indigo-600 transition-colors w-fit"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Back to Dashboard
-        </button>
-
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-              <TableProperties className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-gray-900 leading-tight">Subject Mark Sheet</h1>
-              <p className="text-gray-500 font-medium">
-                {selectedSubject} — <span className="text-indigo-600 font-bold">{activeClass?.name || 'No Class Selected'}</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {success && (
-              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-100 animate-in fade-in slide-in-from-right-4">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-sm font-bold">Marks Saved Successfully!</span>
-              </div>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={isSaving || !selectedClassId || !selectedSubject}
-              className="flex items-center gap-2 bg-gray-900 text-white font-bold px-6 py-3 rounded-xl hover:bg-indigo-600 transition-all active:scale-95 disabled:opacity-50 shadow-lg"
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">{subject.name}</h1>
+          <p className="text-sm text-slate-500">
+            {activeClass.name} · {subject.kind}
+          </p>
+          {isEotScored && (
+            <p className="text-xs text-slate-500 mt-1 max-w-xl">
+              CW each /{RAW_SCORE_MAX.cwSlot} (×5) · Midterm{' '}
+              {mtEntryMode === 'split'
+                ? `${RAW_SCORE_MAX.mtA}+${RAW_SCORE_MAX.mtB}+${RAW_SCORE_MAX.mtC}`
+                : `/${RAW_SCORE_MAX.mtSingle}`}{' '}
+              · Exam /{RAW_SCORE_MAX.exam} → scaled to {SCORE_FIELD_MAX.cw}+{SCORE_FIELD_MAX.mt}+
+              {SCORE_FIELD_MAX.eot}. Empty cells count as 0.
+            </p>
+          )}
+          {(subject.kind === 'scoreOnly' || mode === 'MIDTERM') && subject.kind !== 'commentOnly' && (
+            <p className="text-xs text-slate-500 mt-1">
+              Max marks: Total {SCORE_FIELD_MAX.total}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as 'EOT' | 'MIDTERM')}
+          >
+            <option value="EOT">EOT</option>
+            <option value="MIDTERM">Midterm</option>
+          </select>
+          {isEotScored && (
+            <select
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              value={mtEntryMode}
+              onChange={(e) => setMtEntryMode(e.target.value as MtEntryMode)}
+              aria-label="Midterm entry mode"
             >
-              <Save className="h-4 w-4" />
-              {isSaving ? 'Saving...' : 'Save Subject Marks'}
-            </button>
-          </div>
+              <option value="split">Midterm: Split (30+30+40)</option>
+              <option value="single">Midterm: Single (/100)</option>
+            </select>
+          )}
+          <button
+            onClick={() => setShowCtx(true)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          >
+            Subject Context
+          </button>
+          <button
+            onClick={saveAll}
+            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm hover:bg-sais-red-dark"
+          >
+            Save Marks
+          </button>
         </div>
       </div>
 
-      {/* Excel-like Spreadsheet Grid */}
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-xl overflow-hidden">
-        {!selectedClassId || !selectedSubject ? (
-          <div className="p-20 text-center">
-            <AlertCircle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 font-medium">Please select a class and subject to view the grid.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gray-100 border-b-2 border-gray-300">
-                  <th className="border-r border-gray-300 px-3 py-2 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest w-12">#</th>
-                  <th className="border-r border-gray-300 px-3 py-2 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest w-32">Student ID</th>
-                  <th className="border-r border-gray-300 px-4 py-2 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest min-w-[200px]">Full Name</th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-[10px] font-black text-indigo-700 uppercase tracking-widest w-20 bg-indigo-50">CW (20)</th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-[10px] font-black text-indigo-700 uppercase tracking-widest w-20 bg-indigo-50">MT (20)</th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-[10px] font-black text-indigo-700 uppercase tracking-widest w-20 bg-indigo-50">EOT (60)</th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-widest w-24 bg-gray-200">Total (100)</th>
-                  <th className="border-r border-gray-300 px-2 py-2 text-center text-[10px] font-black text-gray-700 uppercase tracking-widest w-20 bg-gray-200">Grade</th>
-                  <th className="px-4 py-2 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Comment</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {classStudents.map((student, index) => {
-                  const sMark = marks[student.id] || { cw: '', mt: '', eot: '', comment: '' };
-                  
-                  // 3. Real-time updates: calculating values inline
-                  const cwVal = Number(sMark.cw) || 0;
-                  const mtVal = Number(sMark.mt) || 0;
-                  const eotVal = Number(sMark.eot) || 0;
-                  const { totalScore, grade } = calculateGrade(cwVal, mtVal, eotVal);
-
-                  return (
-                    <tr key={student.id} className="hover:bg-indigo-50 transition-colors group">
-                      <td className="border-r border-gray-200 px-3 py-1 text-xs font-bold text-gray-400 bg-gray-50 text-center">
-                        {index + 1}
-                      </td>
-                      <td className="border-r border-gray-200 px-3 py-1 text-xs font-mono text-gray-500">
-                        {student.studentId}
-                      </td>
-                      <td className="border-r border-gray-200 px-4 py-1 text-sm font-bold text-gray-800">
-                        {student.name}
-                      </td>
-                      <td className="border-r border-gray-200 p-0 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 transition-all">
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          value={sMark.cw}
-                          onChange={(e) => handleMarkChange(student.id, 'cw', e.target.value)}
-                          className="w-full h-10 border-0 bg-transparent px-2 text-center text-sm font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                      </td>
-                      <td className="border-r border-gray-200 p-0 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 transition-all">
-                        <input
-                          type="number"
-                          min="0"
-                          max="20"
-                          value={sMark.mt}
-                          onChange={(e) => handleMarkChange(student.id, 'mt', e.target.value)}
-                          className="w-full h-10 border-0 bg-transparent px-2 text-center text-sm font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                      </td>
-                      <td className="border-r border-gray-200 p-0 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 transition-all">
-                        <input
-                          type="number"
-                          min="0"
-                          max="60"
-                          value={sMark.eot}
-                          onChange={(e) => handleMarkChange(student.id, 'eot', e.target.value)}
-                          className="w-full h-10 border-0 bg-transparent px-2 text-center text-sm font-bold outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                      </td>
-                      <td className="border-r border-gray-200 px-2 py-1 text-center text-sm font-black text-gray-900 bg-gray-100 group-hover:bg-indigo-50/50">
-                        {totalScore}
-                      </td>
-                      <td className={`border-r border-gray-200 px-2 py-1 text-center text-sm font-black bg-gray-100 group-hover:bg-indigo-50/50 ${
-                        grade === 'U' ? 'text-red-600' : 'text-indigo-600'
-                      }`}>
-                        {grade}
-                      </td>
-                      <td className="p-0 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-600 transition-all">
-                        <input
-                          type="text"
-                          value={sMark.comment}
-                          onChange={(e) => handleMarkChange(student.id, 'comment', e.target.value)}
-                          placeholder="Add comment..."
-                          className="w-full h-10 border-0 bg-transparent px-4 text-xs font-medium italic text-gray-500 outline-none"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+      <div className="@container overflow-x-auto bg-white border border-slate-200 rounded-xl">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-slate-600">
+            <tr>
+              <th className="px-3 py-2 text-left">#</th>
+              <th className="px-3 py-2 text-left">Student</th>
+              {isEotScored && (
+                <>
+                  <th className="px-2 py-2 text-center" colSpan={5}>
+                    CW /{RAW_SCORE_MAX.cwSlot} each
+                  </th>
+                  <th className="px-2 py-2 text-center" colSpan={mtColSpan}>
+                    {mtEntryMode === 'split'
+                      ? `MT ${RAW_SCORE_MAX.mtA}/${RAW_SCORE_MAX.mtB}/${RAW_SCORE_MAX.mtC}`
+                      : `MT /${RAW_SCORE_MAX.mtSingle}`}
+                  </th>
+                  <th className="px-2 py-2 text-center">Exam /{RAW_SCORE_MAX.exam}</th>
+                </>
+              )}
+              {subject.kind !== 'commentOnly' && (
+                <th className="px-3 py-2">Total/{SCORE_FIELD_MAX.total}</th>
+              )}
+              {subject.kind !== 'commentOnly' && <th className="px-3 py-2">Grade</th>}
+              <th className="px-3 py-2 text-left">Comment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {classStudents.map((st) => (
+              <StudentScoreRow
+                key={`${st.id}-${mode}-${mtEntryMode}`}
+                studentId={st.id}
+                index={st.index}
+                name={st.name}
+                kind={subject.kind}
+                mode={mode}
+                mtEntryMode={mtEntryMode}
+                existing={existing.get(st.id)}
+                highlighted={highlight.has(st.id)}
+                onCommitEot={onCommitEot}
+                onCommitSimple={onCommitSimple}
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      <div className="bg-indigo-900 text-white p-6 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border-4 border-white">
-        <div className="text-center sm:text-left">
-          <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Grading Summary</p>
-          <p className="text-sm font-medium">Class: <span className="text-white font-bold">{activeClass?.name}</span> | Subject: <span className="text-white font-bold">{selectedSubject}</span></p>
-        </div>
-        <div className="flex gap-4">
-          <div className="text-center">
-            <p className="text-[10px] text-indigo-300 font-black uppercase">Students</p>
-            <p className="text-xl font-black">{classStudents.length}</p>
+      {showCtx && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-slate-950 text-slate-100 rounded-xl p-5 w-full max-w-md space-y-3 border border-slate-700">
+            <h3 className="font-semibold text-sais-brown-light">Set Subject Context</h3>
+            <input
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm"
+              placeholder="Grade band e.g. Year 5"
+              value={ctxGrade}
+              onChange={(e) => setCtxGrade(e.target.value)}
+            />
+            <textarea
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-sm min-h-[100px]"
+              placeholder="Topics covered (comma-separated)"
+              value={ctxTopics}
+              onChange={(e) => setCtxTopics(e.target.value)}
+            />
+            <p className="text-xs text-sais-brown-light">
+              {ctxTopics.split(',').filter((t) => t.trim()).length} topics
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShowCtx(false)} className="px-3 py-2 text-sm text-slate-400">
+                Cancel
+              </button>
+              <button onClick={saveContext} className="px-3 py-2 text-sm rounded-lg bg-sais-red">
+                Save
+              </button>
+            </div>
           </div>
-          <div className="h-10 w-[1px] bg-indigo-800"></div>
-          <div className="text-center">
-            <p className="text-[10px] text-indigo-300 font-black uppercase">Entered</p>
-            <p className="text-xl font-black">{Object.keys(marks).length}</p>
-          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

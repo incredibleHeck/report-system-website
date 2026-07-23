@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -7,18 +7,30 @@ interface AuthContextType {
   logout: () => void;
 }
 
+const AUTH_KEY = 'sais_auth_user';
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    try {
+      const raw = localStorage.getItem(AUTH_KEY);
+      return raw ? (JSON.parse(raw) as User) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  const login = (user: User) => {
-    setCurrentUser(user);
-  };
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem(AUTH_KEY, JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem(AUTH_KEY);
+    }
+  }, [currentUser]);
 
-  const logout = () => {
-    setCurrentUser(null);
-  };
+  const login = (user: User) => setCurrentUser(user);
+  const logout = () => setCurrentUser(null);
 
   return (
     <AuthContext.Provider value={{ currentUser, login, logout }}>

@@ -1,1 +1,85 @@
 @import "tailwindcss";
+
+/*
+  SAIS brand — exact crest palette
+  Crimson #D82227 · Bronze/Brown #713F29 · Charcoal #1E1A1B · White #FFFFFF
+  Tailwind v4: tokens below → utilities like bg-sais-red, text-sais-brown
+*/
+@theme {
+  --color-sais-red: #d82227;
+  --color-sais-red-dark: #b01c20;
+  --color-sais-red-soft: #f9e8e9;
+
+  --color-sais-brown: #713f29;
+  --color-sais-brown-light: #8a5338;
+  --color-sais-brown-soft: #f3ebe7;
+
+  /* Aliases kept so existing `sais-bronze*` classes stay valid */
+  --color-sais-bronze: #713f29;
+  --color-sais-bronze-light: #8a5338;
+  --color-sais-bronze-soft: #f3ebe7;
+
+  --color-sais-black: #1e1a1b;
+  --color-sais-ink: #1e1a1b;
+  --color-sais-white: #ffffff;
+  --color-sais-cream: #ffffff;
+  --color-sais-muted: #6b6462;
+
+  --font-display: "Libre Baskerville", "Times New Roman", Georgia, serif;
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-sais-ink);
+    background-color: var(--color-sais-white);
+  }
+
+  h1,
+  h2,
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+@media print {
+  @page {
+    margin: 1cm;
+    size: A4 portrait;
+  }
+
+  nav,
+  aside,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .term-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  td {
+    border-top: 1px solid transparent;
+  }
+}

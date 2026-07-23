@@ -1,38 +1,184 @@
-export function calculateGrade(cw: number, mt: number, eot: number) {
-  const total = cw + mt + eot;
-  let grade = 'U';
-  let comment = 'Fail';
-  let isPass = false;
+import {
+  SCORE_FIELD_MAX,
+  RAW_SCORE_MAX,
+  clampScore,
+} from './scoreValidation';
+import type { MtEntryMode } from '../types';
 
-  if (total >= 90) {
-    grade = 'A*';
-    comment = 'Outstanding';
-    isPass = true;
-  } else if (total >= 80) {
-    grade = 'A';
-    comment = 'Excellent';
-    isPass = true;
-  } else if (total >= 70) {
-    grade = 'B';
-    comment = 'Very Good';
-    isPass = true;
-  } else if (total >= 60) {
-    grade = 'C';
-    comment = 'Good';
-    isPass = true;
-  } else if (total >= 50) {
-    grade = 'D';
-    comment = 'Credit';
-    isPass = true;
-  } else if (total >= 40) {
-    grade = 'E';
-    comment = 'Pass';
-    isPass = true;
+/** Official SAIS A*–U bands from vault REPORT TEMPLATE */
+export function gradeFromTotal(total: number): { grade: string; comment: string; isPass: boolean } {
+  if (total >= 90) return { grade: 'A*', comment: 'EXCELLENT', isPass: true };
+  if (total >= 80) return { grade: 'A', comment: 'VERY GOOD', isPass: true };
+  if (total >= 70) return { grade: 'B', comment: 'GOOD', isPass: true };
+  if (total >= 60) return { grade: 'C', comment: 'SATISFACTORY', isPass: true };
+  if (total >= 50) return { grade: 'D', comment: 'PASS', isPass: true };
+  if (total >= 40) return { grade: 'E', comment: 'BELOW AVERAGE', isPass: true };
+  return { grade: 'U', comment: 'UNGRADED', isPass: false };
+}
+
+/** Round once at the final total stage before grade bands / report storage. */
+export function roundFinalTotal(totalExact: number): number {
+  return Math.round(totalExact);
+}
+
+function nullToZero(n: number | null | undefined): number {
+  if (n === null || n === undefined || !Number.isFinite(n)) return 0;
+  return n;
+}
+
+export type RawEotInput = {
+  cwRaw?: (number | null | undefined)[] | null;
+  mtEntryMode: MtEntryMode;
+  mtRawSplit?: (number | null | undefined)[] | null;
+  mtRawSingle?: number | null;
+  examRaw?: number | null;
+};
+
+export type ScaledEotResult = {
+  cwExact: number;
+  mtExact: number;
+  eotExact: number;
+  totalExact: number;
+  cw: number;
+  mt: number;
+  eot: number;
+  totalScore: number;
+  grade: string;
+  comment: string;
+  isPass: boolean;
+  cwRaw: [number | null, number | null, number | null, number | null, number | null];
+  mtRawSplit: [number | null, number | null, number | null];
+  mtRawSingle: number | null;
+  examRaw: number | null;
+  mtEntryMode: MtEntryMode;
+};
+
+/**
+ * Scale raw EOT marks → report components.
+ * CW: sum of 5×/10 → /20. MT: /100 → /20. Exam: /100 → /60.
+ * Components stay exact floats; only the final total is rounded for grade mapping.
+ */
+export function scaleRawEotComponents(input: RawEotInput): ScaledEotResult {
+  const cwRaw: [number | null, number | null, number | null, number | null, number | null] = [
+    0, 1, 2, 3, 4,
+  ].map((i) => {
+    const v = input.cwRaw?.[i];
+    if (v === null || v === undefined) return null;
+    return clampScore(v, RAW_SCORE_MAX.cwSlot);
+  }) as [number | null, number | null, number | null, number | null, number | null];
+
+  const cwSum = cwRaw.reduce((acc, v) => acc + nullToZero(v), 0);
+  const cwExact = (cwSum / RAW_SCORE_MAX.cwSum) * SCORE_FIELD_MAX.cw;
+
+  let mtRawSplit: [number | null, number | null, number | null] = [null, null, null];
+  let mtRawSingle: number | null = null;
+  let mtRaw = 0;
+
+  if (input.mtEntryMode === 'split') {
+    mtRawSplit = [
+      input.mtRawSplit?.[0] == null
+        ? null
+        : clampScore(input.mtRawSplit[0], RAW_SCORE_MAX.mtA),
+      input.mtRawSplit?.[1] == null
+        ? null
+        : clampScore(input.mtRawSplit[1], RAW_SCORE_MAX.mtB),
+      input.mtRawSplit?.[2] == null
+        ? null
+        : clampScore(input.mtRawSplit[2], RAW_SCORE_MAX.mtC),
+    ];
+    mtRaw =
+      nullToZero(mtRawSplit[0]) + nullToZero(mtRawSplit[1]) + nullToZero(mtRawSplit[2]);
   } else {
-    grade = 'U';
-    comment = 'Fail';
-    isPass = false;
+    mtRawSingle =
+      input.mtRawSingle == null ? null : clampScore(input.mtRawSingle, RAW_SCORE_MAX.mtSingle);
+    mtRaw = nullToZero(mtRawSingle);
   }
 
-  return { totalScore: total, grade, comment, isPass };
+  const mtExact = (mtRaw / RAW_SCORE_MAX.mtSum) * SCORE_FIELD_MAX.mt;
+
+  const examRaw =
+    input.examRaw == null ? null : clampScore(input.examRaw, RAW_SCORE_MAX.exam);
+  const eotExact = (nullToZero(examRaw) / RAW_SCORE_MAX.exam) * SCORE_FIELD_MAX.eot;
+
+  const totalExact = cwExact + mtExact + eotExact;
+  const totalScore = roundFinalTotal(totalExact);
+  const { grade, comment, isPass } = gradeFromTotal(totalScore);
+
+  return {
+    cwExact,
+    mtExact,
+    eotExact,
+    totalExact,
+    cw: cwExact,
+    mt: mtExact,
+    eot: eotExact,
+    totalScore,
+    grade,
+    comment,
+    isPass,
+    cwRaw,
+    mtRawSplit,
+    mtRawSingle,
+    examRaw,
+    mtEntryMode: input.mtEntryMode,
+  };
 }
+
+/** True when any raw EOT field is present (teacher has activated raw entry). */
+export function hasRawEotData(score: {
+  cwRaw?: (number | null)[] | null;
+  mtRawSplit?: (number | null)[] | null;
+  mtRawSingle?: number | null;
+  examRaw?: number | null;
+}): boolean {
+  if (score.cwRaw?.some((v) => v !== null && v !== undefined)) return true;
+  if (score.mtRawSplit?.some((v) => v !== null && v !== undefined)) return true;
+  if (score.mtRawSingle !== null && score.mtRawSingle !== undefined) return true;
+  if (score.examRaw !== null && score.examRaw !== undefined) return true;
+  return false;
+}
+
+/** Format a scaled contribution for teacher feedback (e.g. 16.8/20). */
+export function formatScaledHint(exact: number, max: number): string {
+  const n = Math.round(exact * 100) / 100;
+  return `${n}/${max}`;
+}
+
+/** EOT scored subjects: components are already scaled (CW/20 + MT/20 + EOT/60). */
+export function calculateGrade(cw: number, mt: number, eot: number) {
+  const c = clampScore(cw, SCORE_FIELD_MAX.cw);
+  const m = clampScore(mt, SCORE_FIELD_MAX.mt);
+  const e = clampScore(eot, SCORE_FIELD_MAX.eot);
+  const totalExact = c + m + e;
+  const totalScore = roundFinalTotal(totalExact);
+  const { grade, comment, isPass } = gradeFromTotal(totalScore);
+  return { totalScore, grade, comment, isPass, cw: c, mt: m, eot: e };
+}
+
+export function calculateScoreOnlyGrade(total: number) {
+  const t = clampScore(total, SCORE_FIELD_MAX.total);
+  const totalScore = roundFinalTotal(t);
+  const { grade, comment, isPass } = gradeFromTotal(totalScore);
+  return { totalScore, grade, comment, isPass };
+}
+
+export function performanceBand(average: number): string {
+  if (average >= 80) return 'Excellent';
+  if (average >= 70) return 'Above Average';
+  if (average >= 60) return 'Average';
+  return 'Below Average';
+}
+
+export function isWeakGrade(grade: string): boolean {
+  return ['C', 'D', 'E', 'U'].includes(grade);
+}
+
+export const GRADING_LEGEND = [
+  { range: '90 – 100', grade: 'A*', label: 'EXCELLENT' },
+  { range: '80 – 89.99', grade: 'A', label: 'VERY GOOD' },
+  { range: '70 – 79.99', grade: 'B', label: 'GOOD' },
+  { range: '60 – 69.99', grade: 'C', label: 'SATISFACTORY' },
+  { range: '50 – 59.99', grade: 'D', label: 'PASS' },
+  { range: '40 – 49.99', grade: 'E', label: 'BELOW AVERAGE' },
+  { range: '0 – 39.99', grade: 'U', label: 'UNGRADED' },
+];
