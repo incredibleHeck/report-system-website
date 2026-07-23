@@ -50,8 +50,9 @@ type Props = {
 
 function scoreInputClass(hasError: boolean) {
   return [
-    'w-12 rounded border px-1 py-1 text-center text-sm',
-    hasError ? 'border-rose-500 bg-rose-50' : 'border-slate-300',
+    'w-12 rounded border px-1.5 py-1 text-center text-sm font-mono font-medium bg-white text-sais-black transition-all duration-150',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red',
+    hasError ? 'border-rose-500 bg-rose-50' : 'border-slate-300 hover:border-slate-400',
   ].join(' ');
 }
 
@@ -253,13 +254,19 @@ function StudentScoreRow({
       : '';
 
   return (
-    <tr className={highlighted ? 'bg-lime-100/70' : 'border-t border-slate-100'}>
-      <td className="px-3 py-2">{index}</td>
-      <td className="px-3 py-2 font-medium whitespace-nowrap">{name}</td>
+    <tr
+      className={
+        highlighted
+          ? 'bg-lime-100/70'
+          : 'border-t border-slate-100 even:bg-sais-brown/5 hover:bg-sais-red/10 transition-colors duration-150'
+      }
+    >
+      <td className="px-3 py-2 text-sais-muted text-xs align-middle font-mono">{index}</td>
+      <td className="px-3 py-2 font-medium text-sais-black whitespace-nowrap align-middle">{name}</td>
 
       {isEotScored && (
         <>
-          <td className="px-1 py-1 align-top" colSpan={5}>
+          <td className="px-1 py-1.5 align-top" colSpan={5}>
             <div className="flex flex-wrap gap-1">
               {cwDraft.map((val, i) => (
                 <input
@@ -284,19 +291,19 @@ function StudentScoreRow({
               ))}
             </div>
             {useRaw && scaledPreview && (
-              <p className="text-[10px] text-slate-500 mt-0.5">
+              <p className="text-[10px] text-sais-muted font-mono mt-0.5">
                 [Scaled: {formatScaledHint(scaledPreview.cwExact, SCORE_FIELD_MAX.cw)}]
               </p>
             )}
             {!useRaw && existing?.cwScore != null && (
-              <p className="text-[10px] text-amber-700 mt-0.5">
+              <p className="text-[10px] text-amber-700 font-mono mt-0.5">
                 Legacy: {formatScaledHint(existing.cwScore, SCORE_FIELD_MAX.cw)}
               </p>
             )}
           </td>
 
           {mtEntryMode === 'split' ? (
-            <td className="px-1 py-1 align-top" colSpan={3}>
+            <td className="px-1 py-1.5 align-top" colSpan={3}>
               <div className="flex flex-wrap gap-1">
                 {(
                   [
@@ -327,18 +334,18 @@ function StudentScoreRow({
                 ))}
               </div>
               {useRaw && scaledPreview && (
-                <p className="text-[10px] text-slate-500 mt-0.5">
+                <p className="text-[10px] text-sais-muted font-mono mt-0.5">
                   [Scaled: {formatScaledHint(scaledPreview.mtExact, SCORE_FIELD_MAX.mt)}]
                 </p>
               )}
               {!useRaw && existing?.mtScore != null && (
-                <p className="text-[10px] text-amber-700 mt-0.5">
+                <p className="text-[10px] text-amber-700 font-mono mt-0.5">
                   Legacy: {formatScaledHint(existing.mtScore, SCORE_FIELD_MAX.mt)}
                 </p>
               )}
             </td>
           ) : (
-            <td className="px-1 py-1 align-top">
+            <td className="px-1 py-1.5 align-top">
               <input
                 type="text"
                 inputMode="decimal"
@@ -357,19 +364,19 @@ function StudentScoreRow({
                 title={`MT: 0–${RAW_SCORE_MAX.mtSingle}`}
               />
               {useRaw && scaledPreview && (
-                <p className="text-[10px] text-slate-500 mt-0.5">
+                <p className="text-[10px] text-sais-muted font-mono mt-0.5">
                   [Scaled: {formatScaledHint(scaledPreview.mtExact, SCORE_FIELD_MAX.mt)}]
                 </p>
               )}
               {!useRaw && existing?.mtScore != null && (
-                <p className="text-[10px] text-amber-700 mt-0.5">
+                <p className="text-[10px] text-amber-700 font-mono mt-0.5">
                   Legacy: {formatScaledHint(existing.mtScore, SCORE_FIELD_MAX.mt)}
                 </p>
               )}
             </td>
           )}
 
-          <td className="px-1 py-1 align-top">
+          <td className="px-1 py-1.5 align-top">
             <input
               type="text"
               inputMode="decimal"
@@ -383,12 +390,12 @@ function StudentScoreRow({
               title={`Exam: 0–${RAW_SCORE_MAX.exam}`}
             />
             {useRaw && scaledPreview && (
-              <p className="text-[10px] text-slate-500 mt-0.5">
+              <p className="text-[10px] text-sais-muted font-mono mt-0.5">
                 [Scaled: {formatScaledHint(scaledPreview.eotExact, SCORE_FIELD_MAX.eot)}]
               </p>
             )}
             {!useRaw && existing?.eotScore != null && (
-              <p className="text-[10px] text-amber-700 mt-0.5">
+              <p className="text-[10px] text-amber-700 font-mono mt-0.5">
                 Legacy: {formatScaledHint(existing.eotScore, SCORE_FIELD_MAX.eot)}
               </p>
             )}
@@ -400,9 +407,11 @@ function StudentScoreRow({
       )}
 
       {kind !== 'commentOnly' && (
-        <td className="px-2 py-1 text-center align-top font-medium">
+        <td className="px-2 py-1.5 text-center align-middle font-medium">
           {isEotScored ? (
-            displayTotal
+            <div className="inline-flex items-center justify-center min-w-[2.75rem] px-2 py-1 rounded bg-sais-brown/10 border border-sais-brown/20 font-bold font-mono text-sais-black text-sm">
+              {displayTotal}
+            </div>
           ) : (
             <input
               type="text"
@@ -435,12 +444,20 @@ function StudentScoreRow({
       )}
 
       {kind !== 'commentOnly' && (
-        <td className="px-3 py-2 text-center font-semibold">{displayGrade}</td>
+        <td className="px-3 py-2 text-center align-middle">
+          {displayGrade ? (
+            <span className="inline-block px-2.5 py-0.5 rounded bg-sais-black text-sais-white text-xs font-bold font-mono shadow-xs">
+              {displayGrade}
+            </span>
+          ) : (
+            <span className="text-sais-muted text-xs">—</span>
+          )}
+        </td>
       )}
 
-      <td className="px-2 py-1 min-w-[200px]">
+      <td className="px-2 py-1.5 min-w-[200px] align-middle">
         <input
-          className="w-full rounded border border-slate-300 px-2 py-1"
+          className="w-full rounded border border-slate-300 px-2.5 py-1 text-sm bg-white text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           onBlur={() => {

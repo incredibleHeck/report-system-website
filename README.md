@@ -21,8 +21,9 @@ React + Vite web port of the **St. Adelaide International Schools (SAIS)** HecTe
 | Student transcripts (search → key → print) for HT / teacher / student | Done |
 | Async `DatabaseRepository` + localStorage adapter (Firestore-shaped) | Done |
 | HT form/subject teacher reassignment + enrollment cascade | Done |
+| Firebase Auth / Firestore (Staff Only RBAC) | Done |
+| Automated Delivery (WhatsApp + Email) | Done |
 | Soft-delete, CSV import | Not started |
-| Firebase Auth / Firestore | Not started |
 
 ---
 
@@ -46,7 +47,7 @@ npm run dev:api
 npm run dev
 ```
 
-Open http://localhost:3000 → **Load SAIS Demo Data** → use Teacher / Headteacher / Student portals.
+Open http://localhost:3000 → use Teacher / Headteacher portals.
 
 ```bash
 npm run lint    # tsc --noEmit
@@ -109,9 +110,8 @@ IDs use `crypto.randomUUID()` (`createId()`).
 |------|-------|----------------|
 | Headteacher | `/headteacher` | `/headteacher/transcripts` |
 | Teacher | `/teacher` | subjects, master, reports, delivery, AI, `/teacher/transcripts` |
-| Student | `/student` | `/student/transcript` (session `studentKey` only — never trust URL) |
 
-Demo login is a **role picker** (not production auth). Student demo prefers `SAIS-2023-0042` (BOATENG AMA) after seed.
+Login is secured via **Firebase Google Sign-In** restricted to `@stadelaideschool.com`. Students and parents do NOT have logins; reports are sent directly via WhatsApp/Email.
 
 ---
 

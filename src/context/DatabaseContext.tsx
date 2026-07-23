@@ -6,25 +6,19 @@ import React, {
   useMemo,
   ReactNode,
 } from 'react';
-import {
-  School,
-  User,
-  ClassStream,
-  Student,
-  LifelongStudent,
-  ClassEnrollment,
-  AssessmentScore,
-  ReportSummary,
-  Contact,
-  SubjectContext,
-  BannedTokenLedger,
-  ClassSettings,
+import { 
+  type School, type User, type ClassStream, type ClassEnrollment, type Student,
+  type LifelongStudent, type AssessmentScore, type ReportSummary, type Contact,
+  type SubjectContext, type BannedTokenLedger,
+  type ClassSettings,
   DEFAULT_CLASS_SETTINGS,
-  Programme,
-  ReportMode,
-  TermCode,
-  SubjectLineSnapshot,
+  type Programme,
+  type ReportMode,
+  type TermCode,
+  type SubjectLineSnapshot,
 } from '../types';
+import { auth } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   parseAcademicYear,
   buildTermKey,
@@ -37,7 +31,11 @@ import {
 } from '../lib/academicYear';
 import { detectTermNumber } from '../lib/term';
 import { KEYS, createId, localRepository, type SaisSnapshot } from '../data';
+import { FirestoreRepository } from '../data/FirestoreRepository';
 
+const activeRepository = import.meta.env.VITE_DATA_BACKEND === 'firestore' && import.meta.env.VITE_FIREBASE_API_KEY
+  ? new FirestoreRepository()
+  : localRepository;
 interface DatabaseContextType {
   /** False until async repository hydrate finishes (simulates Firestore load). */
   dbReady: boolean;
@@ -59,6 +57,7 @@ interface DatabaseContextType {
   registerSchool: (school: Omit<School, 'id'>) => string;
   updateSchool: (id: string, patch: Partial<School>) => void;
   addTeacher: (teacher: Omit<User, 'id' | 'role'>) => string;
+  updateUser: (id: string, patch: Partial<User>) => void;
   createClass: (input: {
     name: string;
     schoolId: string;
@@ -176,6 +175,29 @@ function enrollmentFromClass(
     formTeacherId: cls.teacherId,
     subjectTeacherIds: (cls.subjectTeachers ?? []).map((st) => st.teacherId),
   };
+}
+
+export function deduplicateUsersByEmail(userList: User[]): User[] {
+  const map = new Map<string, User>();
+  for (const u of userList) {
+    const emailKey = (u.email || '').trim().toLowerCase();
+    const key = emailKey || u.id;
+    if (!key) continue;
+    if (!map.has(key)) {
+      map.set(key, u);
+    } else {
+      const existing = map.get(key)!;
+      map.set(key, {
+        ...existing,
+        ...u,
+        name: (u.name && u.name.trim() !== '') ? u.name : existing.name,
+        subjects: (u.subjects && u.subjects.length > 0) ? u.subjects : existing.subjects,
+        role: u.role || existing.role,
+        schoolId: u.schoolId || existing.schoolId,
+      });
+    }
+  }
+  return Array.from(map.values());
 }
 
 function applyLegacyMigration(snap: SaisSnapshot): SaisSnapshot {
@@ -385,7 +407,7 @@ function buildDemoSnapshot(): {
       id: secondaryClassId,
       name: 'YEAR NINE (A)',
       schoolId,
-      programme: 'SECONDARY',
+      programme: 'LOWER_SECONDARY',
       teacherId: tSecondary,
       subjectTeachers: [
         { subjectCode: 'ENG', teacherId: tSecondary },
@@ -857,83 +879,122 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
       .filter((s): s is Student => s !== null);
   }, [lifelongStudents, enrollments]);
 
-  // Async hydrate via repository (fake latency) — same shape as future Firestore load
+  // Async hydrate via repository
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      setDbLoading(true);
-      const loaded = await localRepository.loadAll();
-      const migrated = applyLegacyMigration(loaded);
-      if (cancelled) return;
-      setSchools(migrated.schools);
-      setUsers(migrated.users);
-      setClasses(migrated.classes);
-      setLifelongStudents(migrated.lifelongStudents);
-      setEnrollments(migrated.enrollments);
-      setScores(migrated.scores);
-      setSummaries(migrated.summaries);
-      setContacts(migrated.contacts);
-      setSubjectContexts(migrated.subjectContexts);
-      setBannedTokens(migrated.bannedTokens);
-      setActiveClassId(migrated.activeClassId);
-      setKeySeq(migrated.keySeq);
-      await localRepository.replaceAll(migrated);
-      if (cancelled) return;
-      setDbReady(true);
+    let unsubscribe: () => void = () => {};
+
+    const clearData = () => {
+      setSchools([]);
+      setUsers([]);
+      setClasses([]);
+      setLifelongStudents([]);
+      setEnrollments([]);
+      setScores([]);
+      setSummaries([]);
+      setContacts([]);
+      setSubjectContexts([]);
+      setBannedTokens([]);
+      setActiveClassId(null);
+      setKeySeq({});
+      setDbReady(false);
       setDbLoading(false);
-    })();
+    };
+
+    const loadData = async () => {
+      setDbLoading(true);
+      try {
+        const loaded = await activeRepository.loadAll();
+        const migrated = applyLegacyMigration(loaded);
+        if (cancelled) return;
+        setSchools(migrated.schools);
+        setUsers(deduplicateUsersByEmail(migrated.users));
+        setClasses(migrated.classes);
+        setLifelongStudents(migrated.lifelongStudents);
+        setEnrollments(migrated.enrollments);
+        setScores(migrated.scores);
+        setSummaries(migrated.summaries);
+        setContacts(migrated.contacts);
+        setSubjectContexts(migrated.subjectContexts);
+        setBannedTokens(migrated.bannedTokens);
+        setActiveClassId(migrated.activeClassId);
+        setKeySeq(migrated.keySeq);
+        await activeRepository.replaceAll(migrated);
+        if (cancelled) return;
+        setDbReady(true);
+      } catch (err) {
+        console.error("Error loading data:", err);
+      } finally {
+        if (!cancelled) setDbLoading(false);
+      }
+    };
+
+    if (import.meta.env.VITE_DATA_BACKEND === 'firestore') {
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          loadData();
+        } else {
+          if (cancelled) return;
+          clearData();
+        }
+      });
+    } else {
+      loadData();
+    }
+
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('schools', schools);
+    void activeRepository.saveCollection('schools', schools);
   }, [schools, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('users', users);
+    void activeRepository.saveCollection('users', users);
   }, [users, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('classes', classes);
+    void activeRepository.saveCollection('classes', classes);
   }, [classes, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('lifelongStudents', lifelongStudents);
+    void activeRepository.saveCollection('lifelongStudents', lifelongStudents);
   }, [lifelongStudents, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('enrollments', enrollments);
+    void activeRepository.saveCollection('enrollments', enrollments);
   }, [enrollments, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('scores', scores);
+    void activeRepository.saveCollection('scores', scores);
   }, [scores, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('summaries', summaries);
+    void activeRepository.saveCollection('summaries', summaries);
   }, [summaries, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('contacts', contacts);
+    void activeRepository.saveCollection('contacts', contacts);
   }, [contacts, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('subjectContexts', subjectContexts);
+    void activeRepository.saveCollection('subjectContexts', subjectContexts);
   }, [subjectContexts, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('bannedTokens', bannedTokens);
+    void activeRepository.saveCollection('bannedTokens', bannedTokens);
   }, [bannedTokens, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('activeClassId', activeClassId);
+    void activeRepository.saveCollection('activeClassId', activeClassId);
   }, [activeClassId, dbReady]);
   useEffect(() => {
     if (!dbReady) return;
-    void localRepository.saveCollection('keySeq', keySeq);
+    void activeRepository.saveCollection('keySeq', keySeq);
   }, [keySeq, dbReady]);
 
   const cascadeEnrollmentTeachers = (classId: string, cls: ClassStream) => {
@@ -970,6 +1031,10 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     const id = createId();
     setUsers((prev) => [...prev, { ...teacher, role: 'teacher', id }]);
     return id;
+  };
+
+  const updateUser = (id: string, patch: Partial<User>) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
   };
 
   const createClass = (input: {
@@ -1432,7 +1497,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     setBannedTokens([]);
     setActiveClassId(null);
     setKeySeq({});
-    void localRepository.clearAll();
+    void activeRepository.clearAll();
   };
 
   const seedDemoData = () => {
@@ -1449,7 +1514,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     setBannedTokens(demo.bannedTokens);
     setActiveClassId(demo.activeClassId);
     setKeySeq(demo.keySeq);
-    void localRepository.replaceAll({
+    void activeRepository.replaceAll({
       schools: demo.schools,
       users: demo.users,
       classes: demo.classes,
@@ -1483,7 +1548,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  if (dbLoading || !dbReady) {
+  if (dbLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-sais-cream text-sais-muted text-sm">
         Loading school data…
@@ -1512,6 +1577,7 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         registerSchool,
         updateSchool,
         addTeacher,
+        updateUser,
         createClass,
         updateClassSettings,
         assignSubjectTeacher,

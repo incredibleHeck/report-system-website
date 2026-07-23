@@ -190,9 +190,13 @@ export function termHeading(academicYear: string, termCode: TermCode): string {
 export async function assertTranscriptAccess(
   studentKey: string,
   source: TranscriptDataSource,
-  scope: { role: User['role']; userId: string; schoolId?: string }
+  scope: { role: User['role'] | 'student'; userId: string; schoolId?: string }
 ): Promise<boolean> {
   if (scope.role === 'student') return false;
-  const hits = await searchStudentsByName(studentKey, source, scope);
+  const hits = await searchStudentsByName(
+    studentKey,
+    source,
+    scope as { role: User['role']; userId: string; schoolId?: string }
+  );
   return hits.some((h) => h.studentKey === studentKey);
 }

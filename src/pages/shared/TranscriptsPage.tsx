@@ -119,17 +119,17 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
       {!sessionStudentKey && (
         <form
           onSubmit={runSearch}
-          className="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap gap-2 no-print"
+          className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-wrap gap-3 no-print"
         >
           <input
-            className="flex-1 min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="flex-1 min-w-[220px] rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs"
             placeholder="Search name or SAIS-YYYY-NNNN"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <button
             type="submit"
-            className="rounded-lg bg-sais-red text-white px-4 py-2 text-sm"
+            className="rounded-lg bg-sais-red text-white font-semibold px-5 py-2.5 text-sm hover:bg-sais-red-dark active:scale-[0.98] transition-all shadow-xs disabled:opacity-50"
             disabled={loading}
           >
             Search

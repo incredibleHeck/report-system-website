@@ -152,12 +152,12 @@ export default function MasterScoreSheet() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Master Score Sheet</h1>
-          <p className="text-sm text-slate-500">{activeClass.name}</p>
+          <h1 className="text-2xl font-bold text-sais-black">Master Score Sheet</h1>
+          <p className="text-sm text-sais-muted">{activeClass.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <select
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
             value={mode}
             onChange={(e) => setMode(e.target.value as 'EOT' | 'MIDTERM')}
           >
@@ -166,14 +166,14 @@ export default function MasterScoreSheet() {
           </select>
           <button
             onClick={finalize}
-            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm hover:bg-sais-red-dark disabled:opacity-50"
+            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm font-medium hover:bg-sais-red-dark focus-visible:ring-2 focus-visible:ring-sais-red active:scale-[0.98] transition-all duration-150 shadow-xs disabled:opacity-50"
             disabled={!isFormTeacher}
           >
             Finalize Reports
           </button>
           <button
             onClick={unfinalizeSelected}
-            className="rounded-lg border border-slate-300 text-slate-700 px-4 py-2 text-sm disabled:opacity-50"
+            className="rounded-lg border border-slate-300 bg-white text-sais-black px-4 py-2 text-sm font-medium hover:border-slate-400 focus-visible:ring-2 focus-visible:ring-sais-red active:scale-[0.98] transition-all duration-150 disabled:opacity-50"
             disabled={!isFormTeacher || classStudents.length === 0}
             title="Unfinalize first student (clears snapshot)"
           >
@@ -182,56 +182,56 @@ export default function MasterScoreSheet() {
         </div>
       </div>
 
-      <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl">
-        <table className="min-w-full text-xs">
-          <thead className="bg-slate-50">
+      <div className="@container overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-xs max-h-[75vh] overflow-y-auto">
+        <table className="min-w-full text-xs border-collapse">
+          <thead className="bg-sais-black text-sais-white sticky top-0 z-10">
             <tr>
-              <th className="px-2 py-2 text-left">Student</th>
+              <th className="px-3 py-2.5 text-left sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Student</th>
               {scoredSubjects.map((s) => (
-                <th key={s.code} className="px-2 py-2" title={`Avg ${avgs[s.code] || 0}`}>
+                <th key={s.code} className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider" title={`Avg ${avgs[s.code] || 0}`}>
                   {s.abbr}
                 </th>
               ))}
-              <th className="px-2 py-2">Raw</th>
-              <th className="px-2 py-2">Avg</th>
-              <th className="px-2 py-2">Rank</th>
-              <th className="px-2 py-2">Att</th>
-              <th className="px-2 py-2 text-left">General Comment</th>
+              <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Raw</th>
+              <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Avg</th>
+              <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Rank</th>
+              <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Att</th>
+              <th className="px-3 py-2.5 text-left sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">General Comment</th>
             </tr>
           </thead>
           <tbody>
             {draft.map((row) => {
               const st = classStudents.find((s) => s.id === row.studentId)!;
               return (
-                <tr key={row.studentId} className="border-t border-slate-100">
-                  <td className="px-2 py-2 font-medium whitespace-nowrap">{st.name}</td>
+                <tr key={row.studentId} className="border-t border-slate-100 even:bg-sais-brown/5 hover:bg-sais-red/10 transition-colors duration-150">
+                  <td className="px-3 py-2 font-medium text-sais-black whitespace-nowrap align-middle">{st.name}</td>
                   {scoredSubjects.map((sub) => {
                     const sc = classScores.find(
                       (x) => x.studentId === st.id && x.subjectCode === sub.code
                     );
                     return (
-                      <td key={sub.code} className="px-2 py-2 text-center">
+                      <td key={sub.code} className="px-2 py-2 text-center align-middle font-mono font-medium">
                         {sc?.totalScore ?? '—'}
                       </td>
                     );
                   })}
-                  <td className="px-2 py-2 text-center font-semibold">{row.rawScore}</td>
-                  <td className="px-2 py-2 text-center">
+                  <td className="px-2 py-2 text-center font-bold font-mono text-sais-black align-middle">{row.rawScore}</td>
+                  <td className="px-2 py-2 text-center align-middle font-mono">
                     {row.averageScore} ({row.aveGrade})
                   </td>
-                  <td className="px-2 py-2 text-center">{row.rank}</td>
-                  <td className="px-2 py-2 text-center">
+                  <td className="px-2 py-2 text-center align-middle font-mono font-semibold">{row.rank}</td>
+                  <td className="px-2 py-2 text-center align-middle">
                     <input
-                      className="w-12 rounded border border-slate-300 px-1 py-0.5 text-center"
+                      className="w-12 rounded border border-slate-300 bg-white px-1 py-0.5 text-center font-mono text-xs text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
                       value={st.attendance}
                       onChange={(e) =>
                         updateStudent(st.id, { attendance: Number(e.target.value) || 0 })
                       }
                     />
                   </td>
-                  <td className="px-2 py-2 min-w-[220px]">
+                  <td className="px-3 py-2 min-w-[220px] align-middle">
                     <input
-                      className="w-full rounded border border-slate-300 px-2 py-1"
+                      className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
                       value={general[st.id] || ''}
                       onChange={(e) =>
                         setGeneral((prev) => ({ ...prev, [st.id]: e.target.value }))
@@ -247,30 +247,32 @@ export default function MasterScoreSheet() {
       </div>
 
       {mode === 'EOT' && (
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <h3 className="font-semibold mb-2">PE Comments</h3>
-            {classStudents.map((st) => (
-              <input
-                key={st.id}
-                className="w-full mb-2 rounded border border-slate-300 px-2 py-1 text-sm"
-                placeholder={st.name}
-                value={pe[st.id] || ''}
-                onChange={(e) => setPe((prev) => ({ ...prev, [st.id]: e.target.value }))}
-              />
-            ))}
-          </div>
-          <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <h3 className="font-semibold mb-2">Club Comments</h3>
-            {classStudents.map((st) => (
-              <input
-                key={st.id}
-                className="w-full mb-2 rounded border border-slate-300 px-2 py-1 text-sm"
-                placeholder={st.name}
-                value={club[st.id] || ''}
-                onChange={(e) => setClub((prev) => ({ ...prev, [st.id]: e.target.value }))}
-              />
-            ))}
+        <div className="@container">
+          <div className="grid @[600px]:grid-cols-2 gap-4">
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <h3 className="font-semibold text-sais-black mb-3">PE Comments</h3>
+              {classStudents.map((st) => (
+                <input
+                  key={st.id}
+                  className="w-full mb-2 rounded border border-slate-300 bg-white px-2.5 py-1 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
+                  placeholder={st.name}
+                  value={pe[st.id] || ''}
+                  onChange={(e) => setPe((prev) => ({ ...prev, [st.id]: e.target.value }))}
+                />
+              ))}
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <h3 className="font-semibold text-sais-black mb-3">Club Comments</h3>
+              {classStudents.map((st) => (
+                <input
+                  key={st.id}
+                  className="w-full mb-2 rounded border border-slate-300 bg-white px-2.5 py-1 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
+                  placeholder={st.name}
+                  value={club[st.id] || ''}
+                  onChange={(e) => setClub((prev) => ({ ...prev, [st.id]: e.target.value }))}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}

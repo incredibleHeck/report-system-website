@@ -88,7 +88,7 @@ export default function DashboardLayout() {
 
       <div
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 transform bg-sais-black text-white transition-transform duration-300 ease-in-out md:static md:translate-x-0 flex flex-col',
+          'fixed inset-y-0 left-0 z-50 w-64 transform bg-sais-black text-white transition-transform duration-300 ease-in-out md:static md:translate-x-0 flex flex-col shadow-xl',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -97,24 +97,24 @@ export default function DashboardLayout() {
             <img
               src="/sais-logo.png"
               alt="St. Adelaide International Schools"
-              className="h-12 w-12 object-contain flex-shrink-0 bg-white rounded-full p-0.5"
+              className="h-10 w-10 object-contain flex-shrink-0 bg-white rounded-full p-0.5 shadow-sm"
             />
             <div className="min-w-0">
               <p className="text-sm font-bold tracking-wide text-sais-red truncate font-display">
                 SAIS HecTech
               </p>
-              <p className="text-[10px] text-sais-brown-light uppercase tracking-wider">
+              <p className="text-[10px] text-sais-brown-light uppercase tracking-wider font-semibold">
                 Report System
               </p>
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="md:hidden text-white/60">
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden text-white/60 hover:text-white transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-3 px-2">
-          <nav className="space-y-0.5">
+        <div className="flex-1 overflow-y-auto py-4 pr-3 pl-2">
+          <nav className="space-y-1">
             {links.map((item) => (
               <NavLink
                 key={item.name}
@@ -123,10 +123,10 @@ export default function DashboardLayout() {
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    'group flex items-center rounded-md px-3 py-2 text-sm font-medium',
+                    'group flex items-center rounded-r-lg rounded-l-xs px-3 py-2.5 text-sm font-medium transition-all duration-150',
                     isActive
-                      ? 'bg-sais-red/20 text-white border-l-2 border-sais-red'
-                      : 'text-white/70 hover:bg-white/5 hover:text-white'
+                      ? 'bg-sais-red/20 text-white border-l-4 border-sais-red font-semibold shadow-xs'
+                      : 'text-white/70 hover:bg-white/5 hover:text-white hover:border-l-4 hover:border-white/20 border-l-4 border-transparent'
                   )
                 }
               >
@@ -134,11 +134,11 @@ export default function DashboardLayout() {
                   <>
                     <item.icon
                       className={cn(
-                        'mr-3 h-4 w-4 flex-shrink-0',
-                        isActive ? 'text-sais-brown-light' : 'text-white/40'
+                        'mr-3 h-4 w-4 flex-shrink-0 transition-colors',
+                        isActive ? 'text-sais-red' : 'text-white/40 group-hover:text-white/70'
                       )}
                     />
-                    {item.name}
+                    <span className="truncate">{item.name}</span>
                   </>
                 )}
               </NavLink>
@@ -146,28 +146,28 @@ export default function DashboardLayout() {
           </nav>
         </div>
 
-        <div className="border-t border-white/10 p-4 space-y-2">
+        <div className="border-t border-white/10 p-4 space-y-3 bg-white/5">
           {currentUser.role === 'teacher' && (
             <button
               disabled={!canUndo}
               onClick={handleUndo}
-              className="w-full rounded-md px-3 py-2 text-xs font-medium text-sais-brown-light hover:bg-sais-brown/15 disabled:opacity-40"
+              className="w-full rounded-lg px-3 py-2 text-xs font-medium text-sais-brown-light bg-white/5 hover:bg-sais-brown/20 disabled:opacity-30 disabled:hover:bg-white/5 transition-all shadow-xs"
             >
               Undo Last AI Write
             </button>
           )}
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sais-red text-white font-bold text-sm">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sais-red text-white font-bold text-sm shadow-sm ring-2 ring-white/10">
               {currentUser.name.charAt(0).toUpperCase()}
             </div>
             <div className="overflow-hidden">
-              <p className="truncate text-sm font-medium">{currentUser.name}</p>
+              <p className="truncate text-sm font-semibold text-white">{currentUser.name}</p>
               <p className="truncate text-xs text-white/50 capitalize">{currentUser.role}</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-sais-red hover:bg-sais-red/10"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-sais-red hover:bg-sais-red/10 transition-colors"
           >
             <LogOut className="h-4 w-4" />
             Sign Out

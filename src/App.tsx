@@ -16,8 +16,6 @@ import SubjectCommentsAi from './pages/teacher/ai/SubjectCommentsAi';
 import GeneralCommentsAi from './pages/teacher/ai/GeneralCommentsAi';
 import CommentToolsAi from './pages/teacher/ai/CommentToolsAi';
 import ChatbotWorkspace from './pages/teacher/ai/ChatbotWorkspace';
-import StudentDashboard from './pages/student/StudentDashboard';
-import MyTranscriptPage from './pages/student/MyTranscriptPage';
 import TranscriptsPage from './pages/shared/TranscriptsPage';
 
 function ProtectedRoute({ children, allowedRole }: { children: ReactNode; allowedRole: string }) {
@@ -39,6 +37,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/admin-login" element={<Navigate to="/login" replace />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
         <Route element={<DashboardLayout />}>
@@ -165,23 +164,6 @@ export default function App() {
               }
             />
           </Route>
-
-          <Route
-            path="/student"
-            element={
-              <ProtectedRoute allowedRole="student">
-                <StudentDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/student/transcript"
-            element={
-              <ProtectedRoute allowedRole="student">
-                <MyTranscriptPage />
-              </ProtectedRoute>
-            }
-          />
         </Route>
       </Routes>
     </BrowserRouter>

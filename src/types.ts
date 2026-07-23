@@ -1,4 +1,4 @@
-export type Programme = 'PRIMARY' | 'SECONDARY';
+export type Programme = 'PRIMARY' | 'LOWER_SECONDARY' | 'UPPER_SECONDARY';
 export type SubjectKind = 'scored' | 'scoreOnly' | 'commentOnly';
 export type ReportMode = 'EOT' | 'MIDTERM';
 export type TermCode = 'T1' | 'T2' | 'T3';
@@ -25,8 +25,10 @@ export interface School {
 export interface User {
   id: string;
   name: string;
-  role: 'headteacher' | 'teacher' | 'student';
+  email?: string;
+  role: 'headteacher' | 'teacher';
   schoolId: string;
+  subjects?: string[];
   /** For student role: lifelong student UUID */
   linkedStudentId?: string;
   /** For student role: lifelong key (session-bound transcript) */
@@ -76,6 +78,8 @@ export interface LifelongStudent {
   id: string;
   studentKey: string;
   name: string;
+  parentEmail?: string;
+  parentWhatsApp?: string;
   gender: 'Male' | 'Female' | 'Unknown';
   schoolId: string;
   yearJoined: number;

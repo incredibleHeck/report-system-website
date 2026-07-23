@@ -15,7 +15,6 @@ A **school report-card workspace** for St. Adelaide International Schools:
 
 - Teachers enter CW/MT/EOT (and midterm) marks, finalize master sheets, generate AI comments, export PDFs, deliver via email/WhatsApp.
 - Headteachers manage school, teachers, classes, and teacher assignments.
-- Students view report cards and a **lifelong transcript**.
 - Designed for **multi-campus** growth under one org, still on **React + Vite** (not Next.js).
 
 Original behaviour was reverse-engineered from Google Apps Script vaults:
@@ -32,8 +31,8 @@ Original behaviour was reverse-engineered from Google Apps Script vaults:
 | Frontend | React 19 + Vite 6 + Tailwind 4 | Staff SPA; PDF/print are client-heavy |
 | Backend (now) | Local Express (`server.ts`) | Gemini / WhatsApp / SMTP without Blaze card yet |
 | Backend (later) | Firebase Auth + Firestore + Cloud Functions + Hosting | Google ecosystem; multi-campus; &lt;1k students fits free tier (Functions need Blaze to *deploy*) |
-| Persistence (now) | `LocalStorageRepository` behind `DatabaseRepository` | Flat collections + async API so Firestore swap is days, not weeks |
-| Auth (now) | Demo role picker + `sais_auth_user` | Walkthrough only — **not** production |
+| Persistence (now) | `FirestoreRepository` | Flat collections + async API so Firestore swap is days, not weeks |
+| Auth (now) | Firebase Google Sign-In | Restricted domain staff-only |
 | Student IDs | Lifelong `SAIS-YYYY-NNNN` ≠ class roll | Transcripts / transfers / multi-year history |
 | Framework migration | **Do not** move to Next.js for this app | Multi-campus ≠ SSR requirement |
 
@@ -49,7 +48,7 @@ Original behaviour was reverse-engineered from Google Apps Script vaults:
 - Finalize freezes `subjectLines`; unfinalize clears snapshot aggregates
 - Teacher workspace routes + AI suite + PDF reports
 - Delivery page uses correct EOT vs Midterm cards
-- Transcript search/build/print (HT, teacher scoped, student session-only)
+- Transcript search/build/print (HT, teacher scoped)
 - Classlist: add new, enroll existing, join-term, transfer trim
 - Phase 0 data layer: `src/data/*` + HT teacher reassignment UI
 - `npx tsc --noEmit` clean
@@ -65,9 +64,8 @@ Original behaviour was reverse-engineered from Google Apps Script vaults:
 
 - Soft-delete for students/classes/teachers
 - CSV import (dependency `papaparse` present, unused)
-- Real Firebase Auth / Firestore
 - Entity admin beyond create + reassign
-- Parent portal
+- Parent portal (intentionally replaced by WhatsApp/Email automated delivery)
 - WhatsApp delivery status webhooks / outbox queue
 
 ---
@@ -77,21 +75,19 @@ Original behaviour was reverse-engineered from Google Apps Script vaults:
 ```
 ┌─────────────────────────────┐
 │  React (Vite :3000)         │
-│  AuthContext (demo session) │
+│  AuthContext (Firebase)     │
 │  DatabaseContext ───────────│──► DatabaseRepository
 │  Pages / Transcript / PDF   │         │
 └──────────────┬──────────────┘         ▼
-               │ /api/*          LocalStorageRepository
-               ▼                 (Firestore-shaped keys)
+               │ /api/*          FirestoreRepository
+               ▼                 
 ┌─────────────────────────────┐
 │  Express server.ts (:3001)  │
 │  Gemini · WhatsApp · SMTP   │
 └─────────────────────────────┘
 
 Future:
-  LocalStorageRepository → FirestoreRepository
   server.ts             → Cloud Functions (+ Hosting rewrite)
-  AuthContext demo      → Firebase Auth
 ```
 
 ### Key source files
@@ -130,9 +126,8 @@ Fake read latency: `VITE_FAKE_LATENCY_MS` (default 250). App shows a loading gat
    Roll lives on enrollment / `Student.studentId` view field only.
 2. **Transcripts iterate `enrolledTerms` only.** Missing finalized report → placeholder; terms not enrolled → omit.
 3. **Finalized `subjectLines` are frozen.** Do not rebuild transcript rows from live subject schemas.
-4. **Student transcript route** uses session `studentKey` only — ignore URL/query keys.
-5. **Active classlists** filter by class **and** academic year (same `classId` can appear across years).
-6. Prefer extending `DatabaseRepository` over writing `localStorage` directly in pages.
+4. **Active classlists** filter by class **and** academic year (same `classId` can appear across years).
+5. Prefer extending `DatabaseRepository` over writing `localStorage` directly in pages.
 
 ---
 
@@ -152,8 +147,7 @@ Smoke path after **Load SAIS Demo Data**:
 
 1. Teacher → marks → Master → Finalize  
 2. Transcripts → `BOATENG` → `SAIS-2023-0042`  
-3. Student portal → My Transcript  
-4. Headteacher → reassign a subject teacher  
+3. Headteacher → reassign a subject teacher  
 
 ```bash
 npm run lint   # must stay clean
@@ -168,11 +162,11 @@ Aligned with plan [`firebase_high_impact_next_steps_sais.plan.md`](../../.cursor
 | Priority | Work | Notes |
 |----------|------|-------|
 | ~~1~~ | ~~Delivery ZIP + WhatsApp harden~~ | **Done** — class ZIP with yield/progress; multipart WA upload + retries |
+| ~~4~~ | ~~Firebase foundation~~ | **Done** — Auth + Firestore schema + security rules |
+| ~~5~~ | ~~`FirestoreRepository`~~ | **Done** |
 | 1 | Soft-delete + archive UX | Through repository; keep finalized history |
 | 2 | CSV import | Use existing `papaparse`; classlist + scores |
 | 3 | WhatsApp webhooks / outbox | Delivered/failed status callbacks |
-| 4 | Firebase foundation | Auth + Firestore schema + security rules |
-| 5 | `FirestoreRepository` | Implement `DatabaseRepository`; feature flag |
 | 6 | Functions + Hosting | Port `server.ts`; Blaze required to deploy Functions |
 
 **Do not** start a Next.js migration or nested “scores inside student” storage.

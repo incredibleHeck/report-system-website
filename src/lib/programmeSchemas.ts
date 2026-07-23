@@ -12,24 +12,25 @@ const primarySubjects: SubjectDefinition[] = [
   { code: 'MUSIC', name: 'Music', kind: 'scoreOnly', abbr: 'MUSIC' },
   { code: 'PROJ', name: 'Project Work', kind: 'scoreOnly', abbr: 'PROJ' },
   { code: 'PE', name: 'Physical Education', kind: 'commentOnly', abbr: 'PE' },
-  { code: 'CLUB', name: 'Club', kind: 'commentOnly', abbr: 'CLUB' },
 ];
 
-const secondarySubjects: SubjectDefinition[] = [
-  { code: 'ENG', name: 'English', kind: 'scored', abbr: 'ENG' },
-  { code: 'LIT', name: 'Literature', kind: 'scored', abbr: 'LIT' },
-  { code: 'MATH', name: 'Mathematics', kind: 'scored', abbr: 'MATH' },
+const lowerSecondarySubjects: SubjectDefinition[] = [
   { code: 'BIO', name: 'Biology', kind: 'scored', abbr: 'BIO' },
   { code: 'CHEM', name: 'Chemistry', kind: 'scored', abbr: 'CHEM' },
-  { code: 'PHY', name: 'Physics', kind: 'scored', abbr: 'PHY' },
   { code: 'ICT', name: 'Computing', kind: 'scored', abbr: 'ICT' },
+  { code: 'ENG', name: 'English', kind: 'scored', abbr: 'ENG' },
+  { code: 'FRE', name: 'French', kind: 'scored', abbr: 'FRE' },
   { code: 'GEO', name: 'Geography', kind: 'scored', abbr: 'GEO' },
   { code: 'HIST', name: 'History', kind: 'scored', abbr: 'HIST' },
-  { code: 'FRE', name: 'French', kind: 'scored', abbr: 'FRE' },
+  { code: 'LIT', name: 'Literature', kind: 'scored', abbr: 'LIT' },
+  { code: 'MATH', name: 'Mathematics', kind: 'scored', abbr: 'MATH' },
+  { code: 'PHY', name: 'Physics', kind: 'scored', abbr: 'PHY' },
   { code: 'PROJ', name: 'Project Work', kind: 'scoreOnly', abbr: 'PROJ' },
   { code: 'PE', name: 'Physical Education', kind: 'commentOnly', abbr: 'PE' },
-  { code: 'CLUB', name: 'Club', kind: 'commentOnly', abbr: 'CLUB' },
+  { code: 'CLUB', name: 'Clubs', kind: 'commentOnly', abbr: 'CLUB' },
 ];
+
+const upperSecondarySubjects: SubjectDefinition[] = [];
 
 export const PROGRAMME_SCHEMAS: Record<
   Programme,
@@ -44,10 +45,15 @@ export const PROGRAMME_SCHEMAS: Record<
     hasMusic: true,
     reportOutOf: 700,
   },
-  SECONDARY: {
-    subjects: secondarySubjects,
+  LOWER_SECONDARY: {
+    subjects: lowerSecondarySubjects,
     hasMusic: false,
     reportOutOf: 1000,
+  },
+  UPPER_SECONDARY: {
+    subjects: upperSecondarySubjects,
+    hasMusic: false,
+    reportOutOf: 0,
   },
 };
 
@@ -82,4 +88,32 @@ export function getScoredSubjects(programme: Programme, showProjectWork = true) 
 
 export function getSubjectByCode(programme: Programme, code: string) {
   return PROGRAMME_SCHEMAS[programme].subjects.find((s) => s.code === code);
+}
+
+/** Master list of deduplicated, normalized subjects across all programmes */
+export function getAllUniqueSubjects(): { code: string; name: string }[] {
+  const map = new Map<string, { code: string; name: string }>();
+  const allDefs = [...primarySubjects, ...lowerSecondarySubjects];
+
+  for (const s of allDefs) {
+    let normalizedName = s.name;
+    let normalizedCode = s.code;
+
+    if (normalizedName === 'Computing (ICT)') {
+      normalizedName = 'Computing';
+      normalizedCode = 'ICT';
+    } else if (normalizedName === 'Project (PROJ)' || normalizedName === 'Project Work') {
+      normalizedName = 'Project Work';
+      normalizedCode = 'PROJ';
+    } else if (normalizedName === 'Club' || normalizedName === 'Clubs') {
+      normalizedName = 'Clubs';
+      normalizedCode = 'CLUB';
+    }
+
+    if (!map.has(normalizedName)) {
+      map.set(normalizedName, { code: normalizedCode, name: normalizedName });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }

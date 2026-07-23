@@ -44,3 +44,6 @@ build/
 # Vite
 # vite.config.ts.timestamp-*
 *.timestamp-*
+
+# Firebase Service Account
+service-account.json

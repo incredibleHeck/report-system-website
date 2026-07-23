@@ -241,12 +241,12 @@ export default function SubjectGrid() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">{subject.name}</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-2xl font-bold text-sais-black">{subject.name}</h1>
+          <p className="text-sm text-sais-muted mt-0.5">
             {activeClass.name} · {subject.kind}
           </p>
           {isEotScored && (
-            <p className="text-xs text-slate-500 mt-1 max-w-xl">
+            <p className="text-xs text-sais-muted mt-1 max-w-xl leading-relaxed">
               CW each /{RAW_SCORE_MAX.cwSlot} (×5) · Midterm{' '}
               {mtEntryMode === 'split'
                 ? `${RAW_SCORE_MAX.mtA}+${RAW_SCORE_MAX.mtB}+${RAW_SCORE_MAX.mtC}`
@@ -256,14 +256,14 @@ export default function SubjectGrid() {
             </p>
           )}
           {(subject.kind === 'scoreOnly' || mode === 'MIDTERM') && subject.kind !== 'commentOnly' && (
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-sais-muted mt-1">
               Max marks: Total {SCORE_FIELD_MAX.total}
             </p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           <select
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
             value={mode}
             onChange={(e) => setMode(e.target.value as 'EOT' | 'MIDTERM')}
           >
@@ -272,7 +272,7 @@ export default function SubjectGrid() {
           </select>
           {isEotScored && (
             <select
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
               value={mtEntryMode}
               onChange={(e) => setMtEntryMode(e.target.value as MtEntryMode)}
               aria-label="Midterm entry mode"
@@ -283,43 +283,43 @@ export default function SubjectGrid() {
           )}
           <button
             onClick={() => setShowCtx(true)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-sais-black hover:border-slate-400 focus-visible:ring-2 focus-visible:ring-sais-red active:scale-[0.98] transition-all duration-150"
           >
             Subject Context
           </button>
           <button
             onClick={saveAll}
-            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm hover:bg-sais-red-dark"
+            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm font-medium hover:bg-sais-red-dark focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:ring-offset-1 active:scale-[0.98] transition-all duration-150 shadow-xs"
           >
             Save Marks
           </button>
         </div>
       </div>
 
-      <div className="@container overflow-x-auto bg-white border border-slate-200 rounded-xl">
-        <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-slate-600">
+      <div className="@container overflow-x-auto bg-white border border-slate-200 rounded-xl shadow-xs max-h-[75vh] overflow-y-auto">
+        <table className="min-w-full text-sm border-collapse">
+          <thead className="bg-sais-black text-sais-white sticky top-0 z-10">
             <tr>
-              <th className="px-3 py-2 text-left">#</th>
-              <th className="px-3 py-2 text-left">Student</th>
+              <th className="px-3 py-2.5 text-left sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">#</th>
+              <th className="px-3 py-2.5 text-left sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Student</th>
               {isEotScored && (
                 <>
-                  <th className="px-2 py-2 text-center" colSpan={5}>
+                  <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider" colSpan={5}>
                     CW /{RAW_SCORE_MAX.cwSlot} each
                   </th>
-                  <th className="px-2 py-2 text-center" colSpan={mtColSpan}>
+                  <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider" colSpan={mtColSpan}>
                     {mtEntryMode === 'split'
                       ? `MT ${RAW_SCORE_MAX.mtA}/${RAW_SCORE_MAX.mtB}/${RAW_SCORE_MAX.mtC}`
                       : `MT /${RAW_SCORE_MAX.mtSingle}`}
                   </th>
-                  <th className="px-2 py-2 text-center">Exam /{RAW_SCORE_MAX.exam}</th>
+                  <th className="px-2 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Exam /{RAW_SCORE_MAX.exam}</th>
                 </>
               )}
               {subject.kind !== 'commentOnly' && (
-                <th className="px-3 py-2">Total/{SCORE_FIELD_MAX.total}</th>
+                <th className="px-3 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Total/{SCORE_FIELD_MAX.total}</th>
               )}
-              {subject.kind !== 'commentOnly' && <th className="px-3 py-2">Grade</th>}
-              <th className="px-3 py-2 text-left">Comment</th>
+              {subject.kind !== 'commentOnly' && <th className="px-3 py-2.5 text-center sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Grade</th>}
+              <th className="px-3 py-2.5 text-left sticky top-0 bg-sais-black text-sais-white font-semibold text-xs uppercase tracking-wider">Comment</th>
             </tr>
           </thead>
           <tbody>
