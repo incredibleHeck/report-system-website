@@ -8,7 +8,10 @@ import { weakSubjectsForStudent } from '../../../lib/reportMath';
 import { getCoreScoredSubjects } from '../../../lib/programmeSchemas';
 import { useUndo } from '../../../context/UndoContext';
 
+import { useAuth } from '../../../context/AuthContext';
+
 export default function GeneralCommentsAi() {
+  const { currentUser } = useAuth();
   const { activeClass, classStudents } = useActiveClass();
   const { students, scores, summaries, saveSummaries } = useDatabase();
   const { push } = useUndo();
@@ -19,6 +22,14 @@ export default function GeneralCommentsAi() {
 
   const termKey = activeClass ? termKeyFromSettings(activeClass.settings) : '';
   if (!activeClass) return <p className="text-slate-500">No active class.</p>;
+
+  const userId = currentUser?.id || (currentUser as any)?.uid;
+  const isFormTeacher = Boolean(
+    userId &&
+      (userId === activeClass.teacherId ||
+        userId === (activeClass as any).formTeacherId ||
+        userId === (activeClass as any).formTeacherUid)
+  );
 
   const activeStudentId = studentId || classStudents[0]?.id || '';
   const student = classStudents.find((s) => s.id === activeStudentId);
@@ -121,7 +132,7 @@ export default function GeneralCommentsAi() {
             ))}
           </select>
           <button
-            disabled={busy || !traits.size}
+            disabled={busy || !traits.size || !isFormTeacher}
             onClick={generate}
             className="rounded-lg bg-sais-red text-white px-4 py-2 text-sm disabled:opacity-50"
           >
@@ -129,6 +140,12 @@ export default function GeneralCommentsAi() {
           </button>
         </div>
       </div>
+
+      {!isFormTeacher && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-800 font-medium">
+          Only the assigned Form Teacher for this class can edit general and club comments.
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="bg-slate-950 text-slate-100 rounded-xl p-4 space-y-4 max-h-[70vh] overflow-y-auto border border-slate-800">

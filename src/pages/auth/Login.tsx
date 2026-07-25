@@ -15,11 +15,22 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'headteacher' | 'teacher'>('headteacher');
+
   React.useEffect(() => {
     if (currentUser) {
-      navigate(`/${currentUser.role}`);
+      if (selectedRole === 'headteacher') {
+        if (currentUser.role === 'teacher') {
+          alert('Unauthorized Admin Access: Your account does not have Headteacher/Admin permissions.');
+          navigate('/teacher');
+        } else {
+          navigate('/headteacher');
+        }
+      } else {
+        navigate('/teacher');
+      }
     }
-  }, [currentUser, navigate]);
+  }, [currentUser, navigate, selectedRole]);
 
   const handleGoogleLogin = async () => {
     setIsLoggingIn(true);
@@ -131,6 +142,31 @@ export default function Login() {
       <div className="relative mt-8 sm:mx-auto sm:w-full sm:max-w-md space-y-3">
         {isFirestore ? (
           <div className="bg-white p-8 rounded-lg shadow-xl space-y-6">
+            <div className="flex rounded-xl bg-slate-100 p-1 border border-slate-200 mb-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRole('headteacher')}
+                className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                  selectedRole === 'headteacher'
+                    ? 'bg-sais-red text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Headteacher / Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedRole('teacher')}
+                className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
+                  selectedRole === 'teacher'
+                    ? 'bg-sais-red text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Teacher
+              </button>
+            </div>
+
             <form onSubmit={handleEmailLogin} className="space-y-4">
               {loginError && (
                 <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600 text-left">

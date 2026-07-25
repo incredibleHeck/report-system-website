@@ -5,8 +5,8 @@ import Login from './pages/auth/Login';
 import DashboardLayout from './components/layout/DashboardLayout';
 import HeadteacherDashboard from './pages/headteacher/HeadteacherDashboard';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
-import SubjectGrid from './pages/teacher/SubjectGrid';
-import MasterScoreSheet from './pages/teacher/MasterScoreSheet';
+import SubjectSheet from './pages/teacher/SubjectSheet';
+import MasterSheet from './pages/teacher/MasterSheet';
 import ClassSettings from './pages/teacher/ClassSettings';
 import ContactsPage from './pages/teacher/ContactsPage';
 import HealthCheck from './pages/teacher/HealthCheck';
@@ -25,7 +25,12 @@ function ProtectedRoute({ children, allowedRole }: { children: ReactNode; allowe
     return <Navigate to="/login" replace />;
   }
 
-  if (currentUser.role !== allowedRole) {
+  // Dual capability: Headteachers (headteacher role) can access teacher routes
+  const isAllowed =
+    currentUser.role === allowedRole ||
+    (currentUser.role === 'headteacher' && allowedRole === 'teacher');
+
+  if (!isAllowed) {
     return <Navigate to={`/${currentUser.role}`} replace />;
   }
 
@@ -79,7 +84,7 @@ export default function App() {
               path="subjects/:code"
               element={
                 <ProtectedRoute allowedRole="teacher">
-                  <SubjectGrid />
+                  <SubjectSheet />
                 </ProtectedRoute>
               }
             />
@@ -87,7 +92,7 @@ export default function App() {
               path="master"
               element={
                 <ProtectedRoute allowedRole="teacher">
-                  <MasterScoreSheet />
+                  <MasterSheet />
                 </ProtectedRoute>
               }
             />

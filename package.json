@@ -9,6 +9,7 @@
     "dev:all": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
+    "seed:active-roster": "node scripts/seed-historical-data.cjs --wipe",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },

@@ -1,4 +1,5 @@
 import { academicYearLabel, buildTermKey, termNumberFromCode } from './academicYear';
+import { findStudentByAnyIdentifier, buildMultiYearTranscript } from './transcriptEngine';
 import type {
   ClassEnrollment,
   LifelongStudent,
@@ -92,11 +93,12 @@ export async function searchStudentsByName(
     .filter(
       (l) =>
         l.name.toUpperCase().includes(q) ||
-        l.studentKey.toUpperCase().includes(q)
+        l.studentKey.toUpperCase().includes(q) ||
+        l.id.toUpperCase().includes(q)
     )
     .map((l) => {
       const ens = source.enrollments
-        .filter((e) => e.studentKey === l.studentKey)
+        .filter((e) => e.studentKey === l.studentKey || e.studentId === l.id)
         .sort((a, b) => b.academicYear.localeCompare(a.academicYear));
       return {
         studentKey: l.studentKey,
@@ -115,71 +117,46 @@ export async function getStudentByKey(
   studentKey: string,
   source: TranscriptDataSource
 ): Promise<LifelongStudent | null> {
-  return source.lifelongStudents.find((l) => l.studentKey === studentKey) ?? null;
+  return findStudentByAnyIdentifier(studentKey, source);
 }
 
 export async function buildTranscript(
   studentKey: string,
   source: TranscriptDataSource
 ): Promise<TranscriptDocumentModel | null> {
-  const student = await getStudentByKey(studentKey, source);
-  if (!student) return null;
+  const multiYear = buildMultiYearTranscript(studentKey, source);
+  if (!multiYear) return null;
 
-  const ens = source.enrollments
-    .filter((e) => e.studentKey === studentKey)
-    .sort((a, b) => {
-      const y = a.academicYear.localeCompare(b.academicYear);
-      if (y !== 0) return y;
-      return a.className.localeCompare(b.className);
-    });
-
-  const blocks: TranscriptTermBlock[] = [];
-
-  for (const en of ens) {
-    const terms = [...en.enrolledTerms].sort(
-      (a, b) => termNumberFromCode(a) - termNumberFromCode(b)
-    );
-    for (const termCode of terms) {
-      const termKey = buildTermKey(en.academicYear, termCode);
-      const summary = source.summaries.find(
-        (s) =>
-          s.studentId === en.studentId &&
-          s.academicYear === en.academicYear &&
-          s.termKey === termKey &&
-          s.mode === 'EOT'
-      );
-
-      if (summary?.finalized && summary.subjectLines) {
-        blocks.push({
-          kind: 'finalized',
-          academicYear: en.academicYear,
-          termCode,
-          termKey,
-          className: summary.className || en.className,
-          programme: summary.programme || en.programme,
-          rollNumber: en.rollNumber,
-          averageScore: summary.averageScore,
-          aveGrade: summary.aveGrade,
-          rank: summary.rank,
-          subjectLines: summary.subjectLines,
-          generalComment: summary.generalComment,
-          teacherName: summary.teacherName,
-        });
-      } else {
-        blocks.push({
-          kind: 'missing',
-          academicYear: en.academicYear,
-          termCode,
-          termKey,
-          className: en.className,
-          programme: en.programme,
-          rollNumber: en.rollNumber,
-        });
-      }
+  const blocks: TranscriptTermBlock[] = multiYear.blocks.map((b) => {
+    if (b.finalized && b.subjectLines && b.subjectLines.length > 0) {
+      return {
+        kind: 'finalized',
+        academicYear: b.academicYear,
+        termCode: b.termCode,
+        termKey: b.termKey,
+        className: b.className,
+        programme: b.programme,
+        rollNumber: b.rollNumber,
+        averageScore: b.averageScore,
+        aveGrade: b.aveGrade,
+        rank: b.rank,
+        subjectLines: b.subjectLines,
+        generalComment: b.generalComment,
+        teacherName: b.teacherName,
+      };
     }
-  }
+    return {
+      kind: 'missing',
+      academicYear: b.academicYear,
+      termCode: b.termCode,
+      termKey: b.termKey,
+      className: b.className,
+      programme: b.programme,
+      rollNumber: b.rollNumber,
+    };
+  });
 
-  return { student, blocks };
+  return { student: multiYear.student, blocks };
 }
 
 export function termHeading(academicYear: string, termCode: TermCode): string {
@@ -200,3 +177,5 @@ export async function assertTranscriptAccess(
   );
   return hits.some((h) => h.studentKey === studentKey);
 }
+
+export { buildMultiYearTranscript, findStudentByAnyIdentifier } from './transcriptEngine';

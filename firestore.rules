@@ -5,16 +5,16 @@ service cloud.firestore {
     // Check if the user exists in the staff whitelist
     function isWhitelistedStaff() {
       return request.auth != null && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid));
+             exists(/databases/$(database)/documents/sais_users/$(request.auth.uid));
     }
 
-    match /users/{userId} {
+    match /sais_users/{userId} {
       // Users can read their own profile. Whitelisted staff can read all profiles to assign teachers.
       allow read: if isWhitelistedStaff() || (request.auth != null && request.auth.uid == userId);
       
-      // Staff can only update name and schoolId, preventing role escalation or email changes.
+      // Staff can only update name, schoolId and subjects, preventing role escalation or email changes.
       allow update: if isWhitelistedStaff() && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'schoolId']);
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'schoolId', 'subjects']);
                     
       // Only admins (via Firebase Console/Admin SDK) can add new staff or delete staff
       allow create, delete: if false;

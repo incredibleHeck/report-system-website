@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useActiveClass, useDatabase } from '../../context/DatabaseContext';
+import { useActiveClass, useDatabase, normalizeYearId, getStreamYearId } from '../../context/DatabaseContext';
 import { getSubjectsForTerm } from '../../lib/programmeSchemas';
 import { normalizeGender } from '../../lib/gender';
 import { termsFromJoin } from '../../lib/academicYear';
@@ -15,15 +15,52 @@ export default function TeacherDashboard() {
     enrollExistingStudent,
     transferStudent,
     users,
+    updateClassSettings,
   } = useDatabase();
-  const { activeClass, classes, setActiveClassId, classStudents } = useActiveClass();
+  const {
+    activeClass,
+    classes,
+    setActiveClassId,
+    classStudents,
+    selectedAcademicYearId,
+    setSelectedAcademicYearId,
+    availableStreams,
+  } = useActiveClass();
+  const isHeadteacherRole = currentUser?.role === 'headteacher';
 
-  const myClasses = classes.filter(
-    (c) =>
-      c.teacherId === currentUser?.id ||
-      c.subjectTeachers.some((st) => st.teacherId === currentUser?.id)
+  const userClasses = isHeadteacherRole
+    ? classes
+    : (classes.filter(
+        (c) =>
+          c.teacherId === currentUser?.id ||
+          c.subjectTeachers.some((st) => st.teacherId === currentUser?.id)
+      ).length
+        ? classes.filter(
+            (c) =>
+              c.teacherId === currentUser?.id ||
+              c.subjectTeachers.some((st) => st.teacherId === currentUser?.id)
+          )
+        : classes);
+
+  const displayStreams = userClasses.filter(
+    (cs) => normalizeYearId(getStreamYearId(cs)) === normalizeYearId(selectedAcademicYearId)
   );
-  const visibleClasses = myClasses.length ? myClasses : classes;
+
+  const currentTermYearInfo = activeClass?.settings.termYearInfo || '2026/2027 — Term 1';
+  const [, termPart] = currentTermYearInfo.split(' — ');
+  const selectedTerm = termPart || 'Term 1';
+
+  const handleYearChange = (newYear: string) => {
+    setSelectedAcademicYearId(newYear);
+    if (activeClass) {
+      updateClassSettings(activeClass.id, { termYearInfo: `${newYear} — ${selectedTerm}` });
+    }
+  };
+
+  const handleTermChange = (newTerm: string) => {
+    if (!activeClass) return;
+    updateClassSettings(activeClass.id, { termYearInfo: `${selectedAcademicYearId} — ${newTerm}` });
+  };
 
   const [mode, setMode] = useState<'new' | 'existing'>('new');
   const [studentId, setStudentId] = useState('');
@@ -98,7 +135,7 @@ export default function TeacherDashboard() {
     }
   };
 
-  if (!visibleClasses.length) {
+  if (!userClasses.length) {
     return (
       <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
         <h1 className="text-xl font-bold text-sais-black font-display">No classes assigned</h1>
@@ -122,19 +159,50 @@ export default function TeacherDashboard() {
             Form teacher: <span className="font-semibold text-sais-black">{users.find((u) => u.id === activeClass?.teacherId)?.name || '—'}</span>
           </p>
         </div>
-        <div>
-          <label className="block text-xs text-sais-muted mb-1.5 font-medium">Active class</label>
-          <select
-            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red shadow-xs transition-all min-w-[220px]"
-            value={activeClass?.id || ''}
-            onChange={(e) => setActiveClassId(e.target.value)}
-          >
-            {visibleClasses.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.programme})
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <label className="block text-xs text-sais-muted mb-1 font-medium">Academic Year</label>
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs transition-all cursor-pointer"
+              value={selectedAcademicYearId}
+              onChange={(e) => handleYearChange(e.target.value)}
+            >
+              <option value="2026/2027">2026/2027 (Active Pointer)</option>
+              <option value="2025/2026">2025/2026 (Archived)</option>
+              <option value="2024/2025">2024/2025 (Archived)</option>
+              <option value="2023/2024">2023/2024 (Archived)</option>
+              <option value="2022/2023">2022/2023 (Archived)</option>
+              <option value="2021/2022">2021/2022 (Archived)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-sais-muted mb-1 font-medium">Active Class</label>
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red shadow-xs transition-all min-w-[180px]"
+              value={activeClass?.id || ''}
+              onChange={(e) => setActiveClassId(e.target.value)}
+            >
+              {displayStreams.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.programme})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-sais-muted mb-1 font-medium">Term</label>
+            <select
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs transition-all"
+              value={selectedTerm}
+              onChange={(e) => handleTermChange(e.target.value)}
+            >
+              <option value="Term 1">Term 1</option>
+              <option value="Term 2">Term 2</option>
+              <option value="Term 3">Term 3</option>
+            </select>
+          </div>
         </div>
       </div>
 

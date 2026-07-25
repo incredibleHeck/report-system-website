@@ -32,10 +32,27 @@ import {
 import { detectTermNumber } from '../lib/term';
 import { KEYS, createId, localRepository, type SaisSnapshot } from '../data';
 import { FirestoreRepository } from '../data/FirestoreRepository';
+import { ensureBaselineAcademicYears, createAcademicYearWith3Terms } from '../lib/academicYearInit';
 
 const activeRepository = import.meta.env.VITE_DATA_BACKEND === 'firestore' && import.meta.env.VITE_FIREBASE_API_KEY
   ? new FirestoreRepository()
   : localRepository;
+export const normalizeYearId = (id?: string) => (id ? id.replace('/', '-').trim() : '');
+
+export const getStreamYearId = (cs: ClassStream): string => {
+  if (cs.academicYearId) return normalizeYearId(cs.academicYearId);
+  if (cs.academicYear) return normalizeYearId(cs.academicYear);
+  const parts = cs.id.split('-');
+  if (parts.length >= 2 && /^\d{4}$/.test(parts[0]) && /^\d{4}$/.test(parts[1])) {
+    return `${parts[0]}-${parts[1]}`;
+  }
+  if (cs.settings?.termYearInfo) {
+    const y = cs.settings.termYearInfo.split(' — ')[0] || cs.settings.termYearInfo.split(' - ')[0];
+    if (y) return normalizeYearId(y);
+  }
+  return '2026-2027';
+};
+
 interface DatabaseContextType {
   /** False until async repository hydrate finishes (simulates Firestore load). */
   dbReady: boolean;
@@ -53,6 +70,10 @@ interface DatabaseContextType {
   bannedTokens: BannedTokenLedger[];
   activeClassId: string | null;
   setActiveClassId: (id: string | null) => void;
+  selectedAcademicYearId: string;
+  setSelectedAcademicYearId: (yearId: string) => void;
+  filteredClassStreams: ClassStream[];
+  availableStreams: ClassStream[];
 
   registerSchool: (school: Omit<School, 'id'>) => string;
   updateSchool: (id: string, patch: Partial<School>) => void;
@@ -107,6 +128,10 @@ interface DatabaseContextType {
   ) => void;
   saveSubjectContext: (ctx: SubjectContext) => void;
   mergeBannedTokens: (studentId: string, classId: string, termKey: string, tokens: string[]) => void;
+  createAcademicYear: (
+    academicYear: string,
+    status?: 'active' | 'upcoming'
+  ) => Promise<string>;
   seedDemoData: () => void;
   clearAllData: () => void;
 
@@ -391,11 +416,34 @@ function buildDemoSnapshot(): {
 
   const classes: ClassStream[] = [
     {
+      id: '2026-2027-YEAR-5A',
+      name: 'YEAR FIVE (A)',
+      schoolId,
+      programme: 'PRIMARY',
+      teacherId: tPrimary,
+      academicYearId: '2026-2027',
+      academicYear: '2026/2027',
+      subjectTeachers: [
+        { subjectCode: 'ENG', teacherId: tPrimary },
+        { subjectCode: 'MATH', teacherId: tPrimary },
+        { subjectCode: 'SCI', teacherId: tPrimary },
+      ],
+      settings: {
+        ...DEFAULT_CLASS_SETTINGS(),
+        teacherName: 'MR. HECTOR ARYIKU',
+        termYearInfo: '2026/2027 — Term 1',
+        reportDate: '15 December 2026',
+        nextTermBegins: '10 January 2027',
+      },
+    },
+    {
       id: primaryClassId,
       name: 'YEAR FIVE (A)',
       schoolId,
       programme: 'PRIMARY',
       teacherId: tPrimary,
+      academicYearId: '2025-2026',
+      academicYear: '2025/2026',
       subjectTeachers: [
         { subjectCode: 'ENG', teacherId: tPrimary },
         { subjectCode: 'MATH', teacherId: tPrimary },
@@ -409,6 +457,8 @@ function buildDemoSnapshot(): {
       schoolId,
       programme: 'LOWER_SECONDARY',
       teacherId: tSecondary,
+      academicYearId: '2025-2026',
+      academicYear: '2025/2026',
       subjectTeachers: [
         { subjectCode: 'ENG', teacherId: tSecondary },
         { subjectCode: 'MATH', teacherId: tSecondary },
@@ -428,6 +478,8 @@ function buildDemoSnapshot(): {
       schoolId,
       programme: 'PRIMARY',
       teacherId: tPrimary,
+      academicYearId: '2023-2024',
+      academicYear: '2023/2024',
       subjectTeachers: [{ subjectCode: 'ENG', teacherId: tPrimary }],
       settings: {
         ...DEFAULT_CLASS_SETTINGS(),
@@ -866,6 +918,32 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
   const [bannedTokens, setBannedTokens] = useState<BannedTokenLedger[]>([]);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
   const [keySeq, setKeySeq] = useState<Record<string, number>>({});
+  const [selectedAcademicYearId, setSelectedAcademicYearId] = useState<string>('2026/2027');
+
+  const filteredClassStreams = useMemo(() => {
+    const normSelected = normalizeYearId(selectedAcademicYearId);
+    return classes.filter(
+      (cs) => normalizeYearId(getStreamYearId(cs)) === normSelected
+    );
+  }, [classes, selectedAcademicYearId]);
+
+  useEffect(() => {
+    if (!filteredClassStreams.length) return;
+
+    const currentBelongs = filteredClassStreams.some((cs) => cs.id === activeClassId);
+
+    if (!currentBelongs) {
+      const normSelected = normalizeYearId(selectedAcademicYearId);
+      const targetId = `${normSelected}-YEAR-5A`;
+
+      const year5AStream = filteredClassStreams.find(
+        (cs) => cs.id === targetId || cs.id.endsWith('YEAR-5A') || cs.name.includes('YEAR 5A')
+      );
+
+      const nextStreamId = year5AStream ? year5AStream.id : filteredClassStreams[0].id;
+      setActiveClassId(nextStreamId);
+    }
+  }, [selectedAcademicYearId, filteredClassStreams, activeClassId]);
 
   const students = useMemo(() => {
     const lifeByKey = new Map<string, LifelongStudent>(
@@ -922,8 +1000,24 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         await activeRepository.replaceAll(migrated);
         if (cancelled) return;
         setDbReady(true);
+        void ensureBaselineAcademicYears();
       } catch (err) {
-        console.error("Error loading data:", err);
+        console.error("Error loading data from repository, using demo snapshot fallback:", err);
+        const fallbackSnap = applyLegacyMigration(buildDemoSnapshot());
+        if (cancelled) return;
+        setSchools(fallbackSnap.schools);
+        setUsers(deduplicateUsersByEmail(fallbackSnap.users));
+        setClasses(fallbackSnap.classes);
+        setLifelongStudents(fallbackSnap.lifelongStudents);
+        setEnrollments(fallbackSnap.enrollments);
+        setScores(fallbackSnap.scores);
+        setSummaries(fallbackSnap.summaries);
+        setContacts(fallbackSnap.contacts);
+        setSubjectContexts(fallbackSnap.subjectContexts);
+        setBannedTokens(fallbackSnap.bannedTokens);
+        setActiveClassId(fallbackSnap.activeClassId);
+        setKeySeq(fallbackSnap.keySeq);
+        setDbReady(true);
       } finally {
         if (!cancelled) setDbLoading(false);
       }
@@ -1574,6 +1668,10 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         bannedTokens,
         activeClassId,
         setActiveClassId,
+        selectedAcademicYearId,
+        setSelectedAcademicYearId,
+        filteredClassStreams,
+        availableStreams: filteredClassStreams,
         registerSchool,
         updateSchool,
         addTeacher,
@@ -1597,6 +1695,8 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
         updateContactStatus,
         saveSubjectContext,
         mergeBannedTokens,
+        createAcademicYear: (year: string, status: 'active' | 'upcoming' = 'upcoming') =>
+          createAcademicYearWith3Terms(year, status),
         seedDemoData,
         clearAllData,
         results: scores,
@@ -1619,22 +1719,101 @@ export function useDatabase() {
 }
 
 export function useActiveClass() {
-  const { classes, activeClassId, setActiveClassId, students } = useDatabase();
-  const activeClass = classes.find((c) => c.id === activeClassId) || classes[0] || null;
+  const {
+    classes,
+    activeClassId,
+    setActiveClassId,
+    students,
+    enrollments,
+    lifelongStudents,
+    selectedAcademicYearId,
+    setSelectedAcademicYearId,
+    filteredClassStreams,
+    availableStreams,
+  } = useDatabase();
+  const activeClass =
+    classes.find((c) => c.id === activeClassId) ||
+    filteredClassStreams[0] ||
+    classes[0] ||
+    null;
   const academicYear = activeClass
     ? parseAcademicYear(activeClass.settings.termYearInfo)
     : '';
+
   const classStudents = useMemo(() => {
     if (!activeClass) return [];
-    return students
-      .filter((s) => s.classId === activeClass.id && s.academicYear === academicYear)
-      .sort((a, b) => a.index.localeCompare(b.index));
-  }, [students, activeClass, academicYear]);
+
+    const map = new Map<string, Student>();
+
+    // 1. Direct students matching activeClass.id
+    students
+      .filter((s) => s.classId === activeClass.id || s.currentClassStreamId === activeClass.id)
+      .forEach((s) => map.set(s.studentKey || s.id, s));
+
+    // 2. Class enrollments matching activeClass.id
+    enrollments
+      .filter((e) => e.classId === activeClass.id)
+      .forEach((e) => {
+        const key = e.studentKey || e.studentId;
+        if (!map.has(key)) {
+          const l = lifelongStudents.find((ls) => ls.studentKey === e.studentKey || ls.id === e.studentId);
+          map.set(key, {
+            id: e.studentId,
+            studentKey: e.studentKey || key,
+            name: l?.name || e.studentId,
+            gender: l?.gender || 'Male',
+            index: e.index || '001',
+            classId: activeClass.id,
+            academicYear: activeClass.academicYear || academicYear,
+            attendance: e.attendance || 60,
+            schoolId: activeClass.schoolId || 'sais-school-main',
+            status: l?.status || 'active',
+            yearJoined: 2025,
+            enrolledTerms: e.enrolledTerms || ['T1', 'T2', 'T3'],
+          });
+        }
+      });
+
+    // 3. Fallback: If map is empty for 2025/2026 Year 5A primary class, check lifelongStudents
+    if (map.size === 0 && (activeClass.id === '2025-2026-YEAR-5A' || activeClass.id === 'demo-primary-class')) {
+      lifelongStudents.forEach((l, idx) => {
+        const idxStr = String(idx + 1).padStart(3, '0');
+        map.set(l.studentKey, {
+          id: `SAISDAN05A${idxStr}`,
+          studentKey: l.studentKey,
+          name: l.name,
+          gender: l.gender || 'Male',
+          index: idxStr,
+          classId: activeClass.id,
+          academicYear: activeClass.academicYear || academicYear,
+          attendance: 64,
+          schoolId: 'sais-school-main',
+          status: 'active',
+          yearJoined: 2025,
+          enrolledTerms: ['T1', 'T2', 'T3'],
+        });
+      });
+    }
+
+    // Sort strictly ascending by numeric index (001, 002, 003...)
+    return Array.from(map.values()).sort((a, b) => {
+      const numA = parseInt(a.index, 10) || 0;
+      const numB = parseInt(b.index, 10) || 0;
+      if (numA !== numB) return numA - numB;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [students, enrollments, lifelongStudents, activeClass, academicYear]);
+
   return {
     activeClass,
     activeClassId: activeClass?.id ?? null,
+    selectedClassStreamId: activeClass?.id ?? null,
     setActiveClassId,
     classes,
+    filteredClassStreams,
+    availableStreams,
+    selectedAcademicYearId,
+    setSelectedAcademicYearId,
     classStudents,
     academicYear,
   };

@@ -90,6 +90,46 @@ export function getSubjectByCode(programme: Programme, code: string) {
   return PROGRAMME_SCHEMAS[programme].subjects.find((s) => s.code === code);
 }
 
+/** Master list of predefined clubs */
+export const AVAILABLE_CLUBS = [
+  'Arts',
+  'Beading',
+  'Bible',
+  'Cadet',
+  'Coding',
+  'Dancing',
+  'Drama',
+  'Engineering',
+  'French',
+  'Girls Guide',
+  'Reading',
+  'Regimental',
+  'Taekwondo',
+  'Photography',
+  'Table Tennis',
+];
+
+export function isClubSubject(code: string): boolean {
+  const normalized = (code || '').toUpperCase();
+  return normalized === 'CLUB' || normalized === 'CLUBS';
+}
+
+export function isNonAcademicSubject(code: string, kind?: SubjectKind): boolean {
+  if (isClubSubject(code)) return false;
+  const normalized = (code || '').toUpperCase();
+  return (
+    normalized === 'PE' ||
+    normalized === 'MUSIC' ||
+    normalized === 'PROJ' ||
+    kind === 'scoreOnly' ||
+    kind === 'commentOnly'
+  );
+}
+
+export function isAcademicSubject(code: string, kind?: SubjectKind): boolean {
+  return !isClubSubject(code) && !isNonAcademicSubject(code, kind);
+}
+
 /** Master list of deduplicated, normalized subjects across all programmes */
 export function getAllUniqueSubjects(): { code: string; name: string }[] {
   const map = new Map<string, { code: string; name: string }>();

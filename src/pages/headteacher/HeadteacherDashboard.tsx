@@ -178,13 +178,33 @@ export default function HeadteacherDashboard() {
     if (name) updateClassSettings(classId, { teacherName: name });
   };
 
+  const [newYearInput, setNewYearInput] = useState('');
+  const [creatingYear, setCreatingYear] = useState(false);
+  const { createAcademicYear } = useDatabase();
+
+  const handleCreateAcademicYear = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!newYearInput.trim()) return;
+    setCreatingYear(true);
+    try {
+      const yearStr = newYearInput.trim();
+      await createAcademicYear(yearStr, 'upcoming');
+      alert(`Academic Year "${yearStr}" and its 3 child terms (Term 1, Term 2, Term 3) successfully created!`);
+      setNewYearInput('');
+    } catch (err) {
+      alert(`Error creating Academic Year: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setCreatingYear(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-sais-black font-display">Headteacher Dashboard</h1>
           <p className="text-sais-muted text-sm mt-1">
-            Register school, teachers, and Primary/Secondary class streams
+            Register school, teachers, academic years, and Primary/Secondary class streams
           </p>
         </div>
         <button
@@ -195,29 +215,54 @@ export default function HeadteacherDashboard() {
         </button>
       </div>
 
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200 space-y-4">
-        <h2 className="font-bold text-sais-black text-lg font-display">School</h2>
-        <div className="flex gap-3">
-          <input
-            className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red shadow-xs transition-all"
-            value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
-            placeholder="School name"
-          />
-          <button
-            onClick={() => ensureSchool()}
-            className="rounded-xl bg-sais-red text-white px-5 py-2 text-sm font-semibold hover:bg-sais-red-dark active:scale-[0.98] transition-all shadow-xs"
-          >
-            Save School
-          </button>
-        </div>
-        {school && (
-          <p className="text-xs text-sais-muted font-medium">
-            Active school id: <span className="font-mono text-sais-black">{school.id}</span> ·{' '}
-            <span className="font-semibold text-sais-black">{classes.filter((c) => c.schoolId === school.id).length}</span> classes
+      <div className="grid md:grid-cols-2 gap-6">
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200 space-y-4">
+          <h2 className="font-bold text-sais-black text-lg font-display">School</h2>
+          <div className="flex gap-3">
+            <input
+              className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red shadow-xs transition-all"
+              value={schoolName}
+              onChange={(e) => setSchoolName(e.target.value)}
+              placeholder="School name"
+            />
+            <button
+              onClick={() => ensureSchool()}
+              className="rounded-xl bg-sais-red text-white px-5 py-2 text-sm font-semibold hover:bg-sais-red-dark active:scale-[0.98] transition-all shadow-xs"
+            >
+              Save School
+            </button>
+          </div>
+          {school && (
+            <p className="text-xs text-sais-muted font-medium">
+              Active school id: <span className="font-mono text-sais-black">{school.id}</span> ·{' '}
+              <span className="font-semibold text-sais-black">{classes.filter((c) => c.schoolId === school.id).length}</span> classes
+            </p>
+          )}
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200 space-y-4">
+          <h2 className="font-bold text-sais-black text-lg font-display">Academic Year & Automated 3-Term Creation</h2>
+          <form onSubmit={handleCreateAcademicYear} className="flex gap-3">
+            <input
+              className="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red shadow-xs transition-all font-mono"
+              value={newYearInput}
+              onChange={(e) => setNewYearInput(e.target.value)}
+              placeholder="e.g. 2027/2028"
+              required
+            />
+            <button
+              type="submit"
+              disabled={creatingYear}
+              className="rounded-xl bg-red-800 text-white px-5 py-2 text-sm font-semibold hover:bg-red-900 active:scale-[0.98] transition-all shadow-xs disabled:opacity-50 whitespace-nowrap"
+            >
+              {creatingYear ? 'Creating...' : '+ Add Year & 3 Terms'}
+            </button>
+          </form>
+          <p className="text-xs text-slate-500 font-medium">
+            Baseline active years <span className="font-bold text-slate-800 font-mono">2025/2026</span> & <span className="font-bold text-slate-800 font-mono">2026/2027</span> with 3 child terms each are initialized automatically.
           </p>
-        )}
-      </section>
+        </section>
+      </div>
 
       <div className="grid md:grid-cols-2 gap-6">
         <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200 space-y-4">

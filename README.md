@@ -13,6 +13,9 @@ React + Vite web port of the **St. Adelaide International Schools (SAIS)** HecTe
 | Area | Status |
 |------|--------|
 | Primary / Secondary programme schemas (CW/MT/EOT, Music, Project Term 3, PE/Club) | Done |
+| Active System Pointer (2026/2027 Term 1) & 13 Class Stream Provisioning | Done |
+| Academic Year Archiving (2021–2026) with RBAC Read-Only Locks & HT Override | Done |
+| Historical CSV Ingestion Pipeline & Alumni Stub Auto-Registration (`SAIS-STU-0309+`) | Done |
 | Teacher workspace (settings, subject grids, master sheet, contacts, health) | Done |
 | EOT + Midterm report cards + PDF batch (`html2canvas` + `jspdf`) | Done |
 | Gemini AI (subject, general+traits, tools, chatbot) via Express proxy | Done |

@@ -1,15 +1,10 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  formatScaledHint,
-  hasRawEotData,
-  scaleRawEotComponents,
-  calculateScoreOnlyGrade,
+  calculateSubjectFinalScore,
+  gradeFromTotal,
 } from '../../lib/grading';
 import {
-  RAW_SCORE_MAX,
-  SCORE_FIELD_MAX,
   parseOptionalScore,
-  sanitizeScoreInput,
 } from '../../lib/scoreValidation';
 import type { AssessmentScore, MtEntryMode } from '../../types';
 
@@ -37,6 +32,7 @@ export type SimpleRowCommit = {
 
 type Props = {
   studentId: string;
+  rowIndex: number;
   index: number | string;
   name: string;
   kind: 'scored' | 'scoreOnly' | 'commentOnly';
@@ -48,10 +44,10 @@ type Props = {
   onCommitSimple: (row: SimpleRowCommit) => void;
 };
 
-function scoreInputClass(hasError: boolean) {
+function inputCellClass(hasError: boolean = false) {
   return [
-    'w-12 rounded border px-1.5 py-1 text-center text-sm font-mono font-medium bg-white text-sais-black transition-all duration-150',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red',
+    'w-12 mx-auto text-center font-mono text-xs rounded border py-1 bg-white text-slate-900 transition-all duration-150',
+    'focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600',
     hasError ? 'border-rose-500 bg-rose-50' : 'border-slate-300 hover:border-slate-400',
   ].join(' ');
 }
@@ -63,6 +59,7 @@ function toDraft(n: number | null | undefined): string {
 
 function StudentScoreRow({
   studentId,
+  rowIndex,
   index,
   name,
   kind,
@@ -76,414 +73,385 @@ function StudentScoreRow({
   const isEotScored = kind === 'scored' && mode === 'EOT';
   const isSimpleScore = kind === 'scoreOnly' || mode === 'MIDTERM';
 
-  const initialUseRaw = isEotScored && existing ? hasRawEotData(existing) : false;
-
-  const [useRaw, setUseRaw] = useState(initialUseRaw);
   const [cwDraft, setCwDraft] = useState<string[]>(() =>
-    (existing?.cwRaw ?? [null, null, null, null, null]).map(toDraft)
+    (existing?.cwRaw ?? [
+      existing?.cw1 ?? null,
+      existing?.cw2 ?? null,
+      existing?.cw3 ?? null,
+      existing?.cw4 ?? null,
+      existing?.cw5 ?? null,
+    ]).map(toDraft)
   );
-  const [mtSplitDraft, setMtSplitDraft] = useState<string[]>(() =>
-    (existing?.mtRawSplit ?? [null, null, null]).map(toDraft)
-  );
-  const [mtSingleDraft, setMtSingleDraft] = useState(() => toDraft(existing?.mtRawSingle));
-  const [examDraft, setExamDraft] = useState(() => toDraft(existing?.examRaw));
-  const [totalDraft, setTotalDraft] = useState(() =>
-    existing?.totalScore != null && (kind === 'scoreOnly' || mode === 'MIDTERM')
-      ? String(existing.totalScore)
-      : ''
-  );
-  const [comment, setComment] = useState(existing?.comment ?? '');
-  const [fieldError, setFieldError] = useState<string | null>(null);
-  const [errorKey, setErrorKey] = useState<string | null>(null);
 
-  // Reset local drafts when loaded score identity changes (term/mode/student data reload)
+  const [mtSplitDraft, setMtSplitDraft] = useState<string[]>(() =>
+    (existing?.mtRawSplit ?? [
+      existing?.mt1 ?? null,
+      existing?.mt2 ?? null,
+      existing?.mt3 ?? null,
+    ]).map(toDraft)
+  );
+
+  const [mtSingleDraft, setMtSingleDraft] = useState(() =>
+    toDraft(existing?.mtRawSingle ?? existing?.mt1)
+  );
+
+  const [examDraft, setExamDraft] = useState(() =>
+    toDraft(existing?.examRaw ?? (existing as any)?.exam)
+  );
+
+  const [totalDraft, setTotalDraft] = useState(() =>
+    existing?.totalScore != null && isSimpleScore ? String(existing.totalScore) : ''
+  );
+
+  const [comment, setComment] = useState(existing?.comment ?? '');
+
   useEffect(() => {
-    const raw = existing ? hasRawEotData(existing) : false;
-    setUseRaw(raw);
-    setCwDraft((existing?.cwRaw ?? [null, null, null, null, null]).map(toDraft));
-    setMtSplitDraft((existing?.mtRawSplit ?? [null, null, null]).map(toDraft));
-    setMtSingleDraft(toDraft(existing?.mtRawSingle));
-    setExamDraft(toDraft(existing?.examRaw));
+    setCwDraft(
+      (existing?.cwRaw ?? [
+        existing?.cw1 ?? null,
+        existing?.cw2 ?? null,
+        existing?.cw3 ?? null,
+        existing?.cw4 ?? null,
+        existing?.cw5 ?? null,
+      ]).map(toDraft)
+    );
+    setMtSplitDraft(
+      (existing?.mtRawSplit ?? [
+        existing?.mt1 ?? null,
+        existing?.mt2 ?? null,
+        existing?.mt3 ?? null,
+      ]).map(toDraft)
+    );
+    setMtSingleDraft(toDraft(existing?.mtRawSingle ?? existing?.mt1));
+    setExamDraft(toDraft(existing?.examRaw ?? (existing as any)?.exam));
     if (isSimpleScore) {
       setTotalDraft(existing?.totalScore != null ? String(existing.totalScore) : '');
     } else {
       setTotalDraft('');
     }
     setComment(existing?.comment ?? '');
-    setFieldError(null);
-    setErrorKey(null);
   }, [existing?.id, existing?.termKey, mode, studentId, isSimpleScore]);
 
-  const scaledPreview = useMemo(() => {
+  // Calculate live scores using SAIS calculation helper
+  const calcResult = useMemo(() => {
     if (!isEotScored) return null;
-    if (!useRaw) {
-      return {
-        cwExact: existing?.cwScore ?? 0,
-        mtExact: existing?.mtScore ?? 0,
-        eotExact: existing?.eotScore ?? 0,
-        totalScore: existing?.totalScore ?? 0,
-        grade: existing?.grade ?? '',
-      };
-    }
-    const scaled = scaleRawEotComponents({
-      cwRaw: cwDraft.map(parseOptionalScore),
+    return calculateSubjectFinalScore({
+      cw1: cwDraft[0],
+      cw2: cwDraft[1],
+      cw3: cwDraft[2],
+      cw4: cwDraft[3],
+      cw5: cwDraft[4],
       mtEntryMode,
-      mtRawSplit: mtSplitDraft.map(parseOptionalScore),
-      mtRawSingle: parseOptionalScore(mtSingleDraft),
-      examRaw: parseOptionalScore(examDraft),
+      mt1: mtSplitDraft[0],
+      mt2: mtSplitDraft[1],
+      mt3: mtSplitDraft[2],
+      mtSingle: mtSingleDraft,
+      exam: examDraft,
     });
-    return scaled;
+  }, [isEotScored, cwDraft, mtEntryMode, mtSplitDraft, mtSingleDraft, examDraft]);
+
+  const commitEotNow = useCallback(() => {
+    if (!isEotScored || !calcResult) return;
+
+    const cwParsed: [number | null, number | null, number | null, number | null, number | null] = [
+      parseOptionalScore(cwDraft[0]),
+      parseOptionalScore(cwDraft[1]),
+      parseOptionalScore(cwDraft[2]),
+      parseOptionalScore(cwDraft[3]),
+      parseOptionalScore(cwDraft[4]),
+    ];
+
+    const mtSplitParsed: [number | null, number | null, number | null] = [
+      parseOptionalScore(mtSplitDraft[0]),
+      parseOptionalScore(mtSplitDraft[1]),
+      parseOptionalScore(mtSplitDraft[2]),
+    ];
+
+    const mtSingleParsed = parseOptionalScore(mtSingleDraft);
+    const examParsed = parseOptionalScore(examDraft);
+
+    onCommitEot({
+      studentId,
+      useRaw: true,
+      cwRaw: cwParsed,
+      mtRawSplit: mtSplitParsed,
+      mtRawSingle: mtSingleParsed,
+      examRaw: examParsed,
+      cwScore: calcResult.cwScaled,
+      mtScore: calcResult.mtScaled,
+      eotScore: calcResult.examScaled,
+      totalScore: calcResult.totalScore,
+      grade: calcResult.grade,
+      comment,
+    });
   }, [
     isEotScored,
-    useRaw,
-    existing,
+    calcResult,
     cwDraft,
     mtSplitDraft,
     mtSingleDraft,
     examDraft,
-    mtEntryMode,
+    comment,
+    studentId,
+    onCommitEot,
   ]);
 
-  const commitEot = useCallback(
-    (next: {
-      useRaw: boolean;
-      cwDraft: string[];
-      mtSplitDraft: string[];
-      mtSingleDraft: string;
-      examDraft: string;
-      comment: string;
-    }) => {
-      if (!isEotScored) return;
-
-      if (!next.useRaw) {
-        onCommitEot({
-          studentId,
-          useRaw: false,
-          cwRaw: [null, null, null, null, null],
-          mtRawSplit: [null, null, null],
-          mtRawSingle: null,
-          examRaw: null,
-          cwScore: existing?.cwScore ?? 0,
-          mtScore: existing?.mtScore ?? 0,
-          eotScore: existing?.eotScore ?? 0,
-          totalScore: existing?.totalScore ?? 0,
-          grade: existing?.grade ?? '',
-          comment: next.comment,
-        });
-        return;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, colKey: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitEotNow();
+      const nextRow = rowIndex + 1;
+      const target = document.querySelector<HTMLInputElement>(
+        `input[data-row="${nextRow}"][data-col="${colKey}"]`
+      );
+      if (target) {
+        target.focus();
+        target.select();
       }
-
-      const scaled = scaleRawEotComponents({
-        cwRaw: next.cwDraft.map(parseOptionalScore),
-        mtEntryMode,
-        mtRawSplit: next.mtSplitDraft.map(parseOptionalScore),
-        mtRawSingle: parseOptionalScore(next.mtSingleDraft),
-        examRaw: parseOptionalScore(next.examDraft),
-      });
-
-      onCommitEot({
-        studentId,
-        useRaw: true,
-        cwRaw: scaled.cwRaw,
-        mtRawSplit: scaled.mtRawSplit,
-        mtRawSingle: scaled.mtRawSingle,
-        examRaw: scaled.examRaw,
-        cwScore: scaled.cwExact,
-        mtScore: scaled.mtExact,
-        eotScore: scaled.eotExact,
-        totalScore: scaled.totalScore,
-        grade: scaled.grade,
-        comment: next.comment,
-      });
-    },
-    [isEotScored, mtEntryMode, onCommitEot, studentId, existing]
-  );
-
-  const activateRawAndSanitize = (
-    key: string,
-    raw: string,
-    max: number,
-    apply: (sanitized: string) => void
-  ) => {
-    const { value, error, reject } = sanitizeScoreInput(raw, max);
-    if (reject) {
-      setFieldError(error ?? `Enter a number from 0 to ${max}`);
-      setErrorKey(key);
-      return;
     }
-    setFieldError(error ?? null);
-    setErrorKey(error ? key : null);
-    if (!useRaw && value !== '') setUseRaw(true);
-    apply(value);
   };
 
-  const onBlurCommitEot = () => {
-    const activated =
-      useRaw ||
-      cwDraft.some((d) => d.trim() !== '') ||
-      mtSplitDraft.some((d) => d.trim() !== '') ||
-      mtSingleDraft.trim() !== '' ||
-      examDraft.trim() !== '';
-    if (activated && !useRaw) setUseRaw(true);
-    commitEot({
-      useRaw: activated,
-      cwDraft,
-      mtSplitDraft,
-      mtSingleDraft,
-      examDraft,
-      comment,
-    });
-    setFieldError(null);
-    setErrorKey(null);
+  const sanitizeInput = (val: string, max: number) => {
+    if (val === '') return '';
+    const num = parseFloat(val);
+    if (isNaN(num)) return '';
+    if (num < 0) return '0';
+    if (num > max) return String(max);
+    return val;
   };
 
-  const commitSimple = (totalStr: string, commentStr: string) => {
-    const { totalScore, grade } = calculateScoreOnlyGrade(Number(totalStr) || 0);
-    onCommitSimple({ studentId, totalScore, grade, comment: commentStr });
-  };
-
-  const displayTotal = isEotScored
-    ? scaledPreview?.totalScore ?? 0
-    : isSimpleScore
-      ? totalDraft || '0'
-      : '';
-  const displayGrade = isEotScored
-    ? scaledPreview?.grade ?? ''
-    : isSimpleScore
-      ? calculateScoreOnlyGrade(Number(totalDraft) || 0).grade
-      : '';
+  // Render Non-Scored Subject Row (PE / Clubs)
+  if (kind === 'commentOnly') {
+    return (
+      <tr className="group/row border-b border-slate-200 hover:bg-red-50/30 transition-colors">
+        <td className="sticky left-0 w-14 z-20 bg-white group-focus-within/row:bg-red-50/60 font-mono text-xs text-slate-500 px-3 py-2.5 border-r border-b border-slate-300 text-left transition-colors">
+          {index}
+        </td>
+        <td className="sticky left-14 w-52 min-w-[208px] z-20 bg-white group-focus-within/row:bg-red-50/60 font-semibold text-xs text-slate-900 px-3 py-2.5 border-r-2 border-b border-slate-300 whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] transition-colors">
+          {name}
+        </td>
+        <td className="px-3 py-2 border-b border-slate-300 focus-within:bg-red-50/40 transition-colors" colSpan={2}>
+          <input
+            data-row={rowIndex}
+            data-col="comment"
+            className="w-full text-xs rounded border border-slate-300 bg-white px-3 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600 transition-all"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            onBlur={() => onCommitSimple({ studentId, totalScore: 0, grade: '', comment })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onCommitSimple({ studentId, totalScore: 0, grade: '', comment });
+                const nextRow = rowIndex + 1;
+                const target = document.querySelector<HTMLInputElement>(
+                  `input[data-row="${nextRow}"][data-col="comment"]`
+                );
+                if (target) {
+                  target.focus();
+                  target.select();
+                }
+              }
+            }}
+            placeholder="Enter evaluation / comment..."
+          />
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr
       className={
         highlighted
-          ? 'bg-lime-100/70'
-          : 'border-t border-slate-100 even:bg-sais-brown/5 hover:bg-sais-red/10 transition-colors duration-150'
+          ? 'group/row bg-amber-100/60'
+          : 'group/row border-b border-slate-200 hover:bg-red-50/30 transition-colors'
       }
     >
-      <td className="px-3 py-2 text-sais-muted text-xs align-middle font-mono">{index}</td>
-      <td className="px-3 py-2 font-medium text-sais-black whitespace-nowrap align-middle">{name}</td>
+      {/* 1. STUDENT PROFILE (Frozen Sticky Left Columns) */}
+      <td className="sticky left-0 w-14 z-20 bg-white group-focus-within/row:bg-red-50/60 font-mono text-xs text-slate-600 px-3 py-2 border-r border-b border-slate-200 text-left transition-colors">
+        {index}
+      </td>
+      <td className="sticky left-14 w-52 min-w-[208px] z-20 bg-white group-focus-within/row:bg-red-50/60 font-semibold text-xs text-slate-900 px-3 py-2 border-r-2 border-b border-slate-300 whitespace-nowrap shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] transition-colors">
+        {name}
+      </td>
 
+      {/* 2. CLASS ASSESSMENT (20%) */}
       {isEotScored && (
         <>
-          <td className="px-1 py-1.5 align-top" colSpan={5}>
-            <div className="flex flex-wrap gap-1">
-              {cwDraft.map((val, i) => (
-                <input
-                  key={i}
-                  type="text"
-                  inputMode="decimal"
-                  aria-label={`Classwork ${i + 1} out of ${RAW_SCORE_MAX.cwSlot}`}
-                  className={scoreInputClass(errorKey === `cw${i}`)}
-                  value={val}
-                  onChange={(e) =>
-                    activateRawAndSanitize(`cw${i}`, e.target.value, RAW_SCORE_MAX.cwSlot, (v) => {
-                      setCwDraft((prev) => {
-                        const next = [...prev];
-                        next[i] = v;
-                        return next;
-                      });
-                    })
-                  }
-                  onBlur={onBlurCommitEot}
-                  title={`CW${i + 1}: 0–${RAW_SCORE_MAX.cwSlot}`}
-                />
-              ))}
-            </div>
-            {useRaw && scaledPreview && (
-              <p className="text-[10px] text-sais-muted font-mono mt-0.5">
-                [Scaled: {formatScaledHint(scaledPreview.cwExact, SCORE_FIELD_MAX.cw)}]
-              </p>
-            )}
-            {!useRaw && existing?.cwScore != null && (
-              <p className="text-[10px] text-amber-700 font-mono mt-0.5">
-                Legacy: {formatScaledHint(existing.cwScore, SCORE_FIELD_MAX.cw)}
-              </p>
-            )}
-          </td>
-
-          {mtEntryMode === 'split' ? (
-            <td className="px-1 py-1.5 align-top" colSpan={3}>
-              <div className="flex flex-wrap gap-1">
-                {(
-                  [
-                    [0, RAW_SCORE_MAX.mtA, 'A'],
-                    [1, RAW_SCORE_MAX.mtB, 'B'],
-                    [2, RAW_SCORE_MAX.mtC, 'C'],
-                  ] as const
-                ).map(([i, max, label]) => (
-                  <input
-                    key={label}
-                    type="text"
-                    inputMode="decimal"
-                    aria-label={`Midterm ${label} out of ${max}`}
-                    className={scoreInputClass(errorKey === `mt${i}`)}
-                    value={mtSplitDraft[i] ?? ''}
-                    onChange={(e) =>
-                      activateRawAndSanitize(`mt${i}`, e.target.value, max, (v) => {
-                        setMtSplitDraft((prev) => {
-                          const next = [...prev];
-                          next[i] = v;
-                          return next;
-                        });
-                      })
-                    }
-                    onBlur={onBlurCommitEot}
-                    title={`MT ${label}: 0–${max}`}
-                  />
-                ))}
-              </div>
-              {useRaw && scaledPreview && (
-                <p className="text-[10px] text-sais-muted font-mono mt-0.5">
-                  [Scaled: {formatScaledHint(scaledPreview.mtExact, SCORE_FIELD_MAX.mt)}]
-                </p>
-              )}
-              {!useRaw && existing?.mtScore != null && (
-                <p className="text-[10px] text-amber-700 font-mono mt-0.5">
-                  Legacy: {formatScaledHint(existing.mtScore, SCORE_FIELD_MAX.mt)}
-                </p>
-              )}
-            </td>
-          ) : (
-            <td className="px-1 py-1.5 align-top">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <td key={`cw-${i}`} className="w-16 px-1 py-1.5 border-r border-b border-slate-200 text-center focus-within:bg-red-50/40 transition-colors">
               <input
                 type="text"
                 inputMode="decimal"
-                aria-label={`Midterm out of ${RAW_SCORE_MAX.mtSingle}`}
-                className={scoreInputClass(errorKey === 'mtSingle')}
-                value={mtSingleDraft}
-                onChange={(e) =>
-                  activateRawAndSanitize(
-                    'mtSingle',
-                    e.target.value,
-                    RAW_SCORE_MAX.mtSingle,
-                    setMtSingleDraft
-                  )
-                }
-                onBlur={onBlurCommitEot}
-                title={`MT: 0–${RAW_SCORE_MAX.mtSingle}`}
+                data-row={rowIndex}
+                data-col={`cw${i}`}
+                className={inputCellClass()}
+                value={cwDraft[i] ?? ''}
+                onChange={(e) => {
+                  const sanitized = sanitizeInput(e.target.value, 10);
+                  setCwDraft((prev) => {
+                    const next = [...prev];
+                    next[i] = sanitized;
+                    return next;
+                  });
+                }}
+                onBlur={commitEotNow}
+                onKeyDown={(e) => handleKeyDown(e, `cw${i}`)}
+                title={`CW ${i + 1}: 0–10`}
               />
-              {useRaw && scaledPreview && (
-                <p className="text-[10px] text-sais-muted font-mono mt-0.5">
-                  [Scaled: {formatScaledHint(scaledPreview.mtExact, SCORE_FIELD_MAX.mt)}]
-                </p>
-              )}
-              {!useRaw && existing?.mtScore != null && (
-                <p className="text-[10px] text-amber-700 font-mono mt-0.5">
-                  Legacy: {formatScaledHint(existing.mtScore, SCORE_FIELD_MAX.mt)}
-                </p>
-              )}
             </td>
-          )}
-
-          <td className="px-1 py-1.5 align-top">
-            <input
-              type="text"
-              inputMode="decimal"
-              aria-label={`Exam out of ${RAW_SCORE_MAX.exam}`}
-              className={scoreInputClass(errorKey === 'exam')}
-              value={examDraft}
-              onChange={(e) =>
-                activateRawAndSanitize('exam', e.target.value, RAW_SCORE_MAX.exam, setExamDraft)
-              }
-              onBlur={onBlurCommitEot}
-              title={`Exam: 0–${RAW_SCORE_MAX.exam}`}
-            />
-            {useRaw && scaledPreview && (
-              <p className="text-[10px] text-sais-muted font-mono mt-0.5">
-                [Scaled: {formatScaledHint(scaledPreview.eotExact, SCORE_FIELD_MAX.eot)}]
-              </p>
-            )}
-            {!useRaw && existing?.eotScore != null && (
-              <p className="text-[10px] text-amber-700 font-mono mt-0.5">
-                Legacy: {formatScaledHint(existing.eotScore, SCORE_FIELD_MAX.eot)}
-              </p>
-            )}
-            {fieldError && (
-              <p className="text-[10px] text-rose-600 mt-0.5 max-w-[6rem]">{fieldError}</p>
-            )}
+          ))}
+          <td className="w-20 px-2 py-1.5 border-r border-b border-slate-300 text-center font-mono font-bold text-xs bg-slate-100 text-slate-800">
+            {calcResult?.cwTotal ?? 0}
+          </td>
+          <td className="w-20 px-2 py-1.5 border-r border-b border-slate-300 text-center font-mono font-bold text-xs bg-amber-50/80 text-amber-900">
+            {calcResult?.cwScaled ?? 0}
           </td>
         </>
       )}
 
-      {kind !== 'commentOnly' && (
-        <td className="px-2 py-1.5 text-center align-middle font-medium">
-          {isEotScored ? (
-            <div className="inline-flex items-center justify-center min-w-[2.75rem] px-2 py-1 rounded bg-sais-brown/10 border border-sais-brown/20 font-bold font-mono text-sais-black text-sm">
-              {displayTotal}
-            </div>
+      {/* 3. MIDTERM ASSESSMENT (20%) */}
+      {isEotScored && (
+        <>
+          {mtEntryMode === 'split' ? (
+            <>
+              {[
+                { idx: 0, max: 30, label: 'mt0' },
+                { idx: 1, max: 30, label: 'mt1' },
+                { idx: 2, max: 40, label: 'mt2' },
+              ].map(({ idx, max, label }) => (
+                <td key={label} className="w-20 px-1 py-1.5 border-r border-b border-slate-200 text-center focus-within:bg-red-50/40 transition-colors">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    data-row={rowIndex}
+                    data-col={label}
+                    className={inputCellClass()}
+                    value={mtSplitDraft[idx] ?? ''}
+                    onChange={(e) => {
+                      const sanitized = sanitizeInput(e.target.value, max);
+                      setMtSplitDraft((prev) => {
+                        const next = [...prev];
+                        next[idx] = sanitized;
+                        return next;
+                      });
+                    }}
+                    onBlur={commitEotNow}
+                    onKeyDown={(e) => handleKeyDown(e, label)}
+                    title={`MT Test ${idx + 1}: 0–${max}`}
+                  />
+                </td>
+              ))}
+            </>
           ) : (
+            <td className="w-20 px-1 py-1.5 border-r border-b border-slate-200 text-center focus-within:bg-red-50/40 transition-colors">
+              <input
+                type="text"
+                inputMode="decimal"
+                data-row={rowIndex}
+                data-col="mtSingle"
+                className="w-16 mx-auto text-center font-mono text-xs rounded border border-slate-300 py-1 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
+                value={mtSingleDraft}
+                onChange={(e) => setMtSingleDraft(sanitizeInput(e.target.value, 100))}
+                onBlur={commitEotNow}
+                onKeyDown={(e) => handleKeyDown(e, 'mtSingle')}
+                title="MT Exam: 0–100"
+              />
+            </td>
+          )}
+          <td className="w-20 px-2 py-1.5 border-r border-b border-slate-300 text-center font-mono font-bold text-xs bg-slate-100 text-slate-800">
+            {calcResult?.mtRaw ?? 0}
+          </td>
+          <td className="w-20 px-2 py-1.5 border-r border-b border-slate-300 text-center font-mono font-bold text-xs bg-amber-50/80 text-amber-900">
+            {calcResult?.mtScaled ?? 0}
+          </td>
+        </>
+      )}
+
+      {/* 4. EXAMINATION (60%) */}
+      {isEotScored && (
+        <>
+          <td className="w-24 px-1 py-1.5 border-r border-b border-slate-200 text-center focus-within:bg-red-50/40 transition-colors">
             <input
               type="text"
               inputMode="decimal"
-              aria-label={`Total out of ${SCORE_FIELD_MAX.total}`}
-              className={scoreInputClass(errorKey === 'total')}
-              value={totalDraft}
-              onChange={(e) => {
-                const { value, error, reject } = sanitizeScoreInput(
-                  e.target.value,
-                  SCORE_FIELD_MAX.total
-                );
-                if (reject) {
-                  setFieldError(error ?? '');
-                  setErrorKey('total');
-                  return;
-                }
-                setFieldError(error ?? null);
-                setErrorKey(error ? 'total' : null);
-                setTotalDraft(value);
-              }}
-              onBlur={() => {
-                commitSimple(totalDraft, comment);
-                setFieldError(null);
-                setErrorKey(null);
-              }}
+              data-row={rowIndex}
+              data-col="exam"
+              className="w-16 mx-auto text-center font-mono text-xs rounded border border-slate-300 py-1 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
+              value={examDraft}
+              onChange={(e) => setExamDraft(sanitizeInput(e.target.value, 100))}
+              onBlur={commitEotNow}
+              onKeyDown={(e) => handleKeyDown(e, 'exam')}
+              title="Exam: 0–100"
             />
-          )}
+          </td>
+          <td className="w-24 px-2 py-1.5 border-r border-b border-slate-300 text-center font-mono font-bold text-xs bg-amber-50/80 text-amber-900">
+            {calcResult?.examScaled ?? 0}
+          </td>
+        </>
+      )}
+
+      {/* MIDTERM or ScoreOnly mode fallback columns */}
+      {!isEotScored && isSimpleScore && (
+        <td className="w-24 px-2 py-1.5 border-r border-b border-slate-300 text-center focus-within:bg-red-50/40 transition-colors">
+          <input
+            type="text"
+            inputMode="decimal"
+            data-row={rowIndex}
+            data-col="total"
+            className="w-16 mx-auto text-center font-mono text-xs rounded border border-slate-300 py-1 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
+            value={totalDraft}
+            onChange={(e) => setTotalDraft(sanitizeInput(e.target.value, 100))}
+            onBlur={() => {
+              const num = Number(totalDraft) || 0;
+              const g = gradeFromTotal(num).grade;
+              onCommitSimple({ studentId, totalScore: num, grade: g, comment });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const num = Number(totalDraft) || 0;
+                const g = gradeFromTotal(num).grade;
+                onCommitSimple({ studentId, totalScore: num, grade: g, comment });
+                handleKeyDown(e, 'total');
+              }
+            }}
+          />
         </td>
       )}
 
-      {kind !== 'commentOnly' && (
-        <td className="px-3 py-2 text-center align-middle">
-          {displayGrade ? (
-            <span className="inline-block px-2.5 py-0.5 rounded bg-sais-black text-sais-white text-xs font-bold font-mono shadow-xs">
-              {displayGrade}
-            </span>
-          ) : (
-            <span className="text-sais-muted text-xs">—</span>
-          )}
-        </td>
-      )}
-
-      <td className="px-2 py-1.5 min-w-[200px] align-middle">
+      {/* 5. TERM SUMMARY & COMMENTS */}
+      <td className="w-24 px-2 py-1.5 border-r border-b border-slate-300 text-center font-mono font-extrabold text-sm bg-emerald-100/70 text-emerald-950">
+        {isEotScored
+          ? calcResult?.totalScore ?? 0
+          : Number(totalDraft) || 0}
+      </td>
+      <td className="w-24 px-2 py-1.5 border-r border-b border-slate-300 text-center">
+        <span className="inline-block px-2.5 py-0.5 rounded font-mono font-bold text-xs bg-slate-900 text-white">
+          {isEotScored
+            ? calcResult?.grade ?? 'U'
+            : gradeFromTotal(Number(totalDraft) || 0).grade}
+        </span>
+      </td>
+      <td className="min-w-[280px] px-2.5 py-1.5 border-b border-slate-300 focus-within:bg-red-50/40 transition-colors">
         <input
-          className="w-full rounded border border-slate-300 px-2.5 py-1 text-sm bg-white text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all"
+          type="text"
+          data-row={rowIndex}
+          data-col="comment"
+          className="w-full text-xs rounded border border-slate-300 bg-white px-2.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
           value={comment}
           onChange={(e) => setComment(e.target.value)}
           onBlur={() => {
-            if (isEotScored) {
-              const activated =
-                useRaw ||
-                cwDraft.some((d) => d.trim() !== '') ||
-                mtSplitDraft.some((d) => d.trim() !== '') ||
-                mtSingleDraft.trim() !== '' ||
-                examDraft.trim() !== '';
-              if (activated && !useRaw) setUseRaw(true);
-              commitEot({
-                useRaw: activated,
-                cwDraft,
-                mtSplitDraft,
-                mtSingleDraft,
-                examDraft,
-                comment,
-              });
-            } else if (kind !== 'commentOnly') {
-              commitSimple(totalDraft, comment);
-            } else {
-              onCommitSimple({ studentId, totalScore: 0, grade: '', comment });
+            if (isEotScored) commitEotNow();
+            else onCommitSimple({ studentId, totalScore: Number(totalDraft) || 0, grade: gradeFromTotal(Number(totalDraft) || 0).grade, comment });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (isEotScored) commitEotNow();
+              else onCommitSimple({ studentId, totalScore: Number(totalDraft) || 0, grade: gradeFromTotal(Number(totalDraft) || 0).grade, comment });
+              handleKeyDown(e, 'comment');
             }
           }}
-          placeholder="Comment..."
+          placeholder="Teacher remarks..."
         />
       </td>
     </tr>

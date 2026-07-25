@@ -182,3 +182,89 @@ export const GRADING_LEGEND = [
   { range: '40 – 49.99', grade: 'E', label: 'BELOW AVERAGE' },
   { range: '0 – 39.99', grade: 'U', label: 'UNGRADED' },
 ];
+
+export type SubjectMarkInput = {
+  cw1?: number | string | null;
+  cw2?: number | string | null;
+  cw3?: number | string | null;
+  cw4?: number | string | null;
+  cw5?: number | string | null;
+  mtEntryMode?: MtEntryMode;
+  mt1?: number | string | null;
+  mt2?: number | string | null;
+  mt3?: number | string | null;
+  mtSingle?: number | string | null;
+  exam?: number | string | null;
+};
+
+export type CalculatedSubjectScore = {
+  cwTotal: number;
+  cwScaled: number;
+  mtRaw: number;
+  mtScaled: number;
+  examRaw: number;
+  examScaled: number;
+  totalScore: number;
+  grade: string;
+  gradeComment: string;
+  isPass: boolean;
+};
+
+/**
+ * Pure calculation helper function for SAIS subject final score & grade.
+ * - Class Assessment (20%): CW1..CW5 (each /10) -> CW Total (/50) -> CW Scaled = (CW Total / 50) * 20 (rounded to 1 decimal place)
+ * - Midterm Assessment (20%): Split (30+30+40) or Single (/100) -> Midterm Raw (/100) -> Midterm Scaled = (Midterm Raw / 100) * 20 (rounded to 1 decimal place)
+ * - Examination (60%): Exam Score (/100) -> Exam Scaled = (Exam Score / 100) * 60 (rounded to 1 decimal place)
+ * - Total Score (/100): CW Scaled + Midterm Scaled + Exam Scaled (rounded to 1 decimal place)
+ * - Grade: Derived from central SAIS grading scale
+ */
+export function calculateSubjectFinalScore(input: SubjectMarkInput): CalculatedSubjectScore {
+  const parseVal = (v: number | string | null | undefined, max: number): number => {
+    if (v === null || v === undefined || v === '') return 0;
+    const num = typeof v === 'number' ? v : parseFloat(String(v));
+    if (isNaN(num)) return 0;
+    return Math.max(0, Math.min(max, num));
+  };
+
+  const cw1 = parseVal(input.cw1, 10);
+  const cw2 = parseVal(input.cw2, 10);
+  const cw3 = parseVal(input.cw3, 10);
+  const cw4 = parseVal(input.cw4, 10);
+  const cw5 = parseVal(input.cw5, 10);
+
+  const cwTotal = cw1 + cw2 + cw3 + cw4 + cw5;
+  const cwScaled = Number(((cwTotal / 50) * 20).toFixed(1));
+
+  const mode = input.mtEntryMode || 'split';
+  let mtRaw = 0;
+
+  if (mode === 'split') {
+    const mt1 = parseVal(input.mt1, 30);
+    const mt2 = parseVal(input.mt2, 30);
+    const mt3 = parseVal(input.mt3, 40);
+    mtRaw = mt1 + mt2 + mt3;
+  } else {
+    mtRaw = parseVal(input.mtSingle, 100);
+  }
+
+  const mtScaled = Number(((mtRaw / 100) * 20).toFixed(1));
+
+  const examRaw = parseVal(input.exam, 100);
+  const examScaled = Number(((examRaw / 100) * 60).toFixed(1));
+
+  const totalScore = Number((cwScaled + mtScaled + examScaled).toFixed(1));
+  const { grade, comment: gradeComment, isPass } = gradeFromTotal(totalScore);
+
+  return {
+    cwTotal,
+    cwScaled,
+    mtRaw,
+    mtScaled,
+    examRaw,
+    examScaled,
+    totalScore,
+    grade,
+    gradeComment,
+    isPass,
+  };
+}

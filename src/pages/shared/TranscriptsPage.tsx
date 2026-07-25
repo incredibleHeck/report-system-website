@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useDatabase } from '../../context/DatabaseContext';
 import TranscriptDocument from '../../components/reports/TranscriptDocument';
@@ -17,6 +18,9 @@ type Props = {
 
 export default function TranscriptsPage({ sessionStudentKey }: Props) {
   const { currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const urlKey = searchParams.get('studentKey');
+
   const { lifelongStudents, enrollments, summaries, schools } = useDatabase();
   const source = useMemo(
     () => ({ lifelongStudents, enrollments, summaries }),
@@ -25,7 +29,7 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
 
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<TranscriptSearchHit[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(sessionStudentKey ?? null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(sessionStudentKey ?? urlKey ?? null);
   const [model, setModel] = useState<TranscriptDocumentModel | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,26 +37,27 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
   const schoolName = schools[0]?.name;
 
   useEffect(() => {
-    if (!sessionStudentKey) return;
+    const targetKey = sessionStudentKey || urlKey;
+    if (!targetKey) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError('');
-      const doc = await buildTranscript(sessionStudentKey, source);
+      const doc = await buildTranscript(targetKey, source);
       if (cancelled) return;
       if (!doc) {
-        setError('No transcript found for your student key.');
+        setError('No transcript found for specified student key.');
         setModel(null);
       } else {
         setModel(doc);
-        setSelectedKey(sessionStudentKey);
+        setSelectedKey(targetKey);
       }
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [sessionStudentKey, source]);
+  }, [sessionStudentKey, urlKey, source]);
 
   const runSearch = async (e?: FormEvent) => {
     e?.preventDefault();

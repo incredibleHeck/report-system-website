@@ -43,6 +43,10 @@ Original behaviour was reverse-engineered from Google Apps Script vaults:
 ### Done and reliable
 
 - Dual programme schemas (`src/lib/programmeSchemas.ts`)
+- Active System Pointer default (Academic Year 2026/2027, Term 1) with all 13 class streams provisioned
+- Academic Year Archiving (2021/2022 through 2025/2026) with read-only protection for teachers and admin override
+- Master Sheet & Subject Sheet multi-term query resolution matching normalized term keys (hyphenated, slashed, underscore)
+- Historical CSV ingestion pipeline (`scripts/seed-historical-data.cjs`) with auto-registration for alumni stubs (`SAIS-STU-0309+`)
 - Score upsert keyed by student|subject|mode|termKey; year-safe `termKey`
 - Lifelong students + class enrollments + `enrolledTerms`
 - Finalize freezes `subjectLines`; unfinalize clears snapshot aggregates

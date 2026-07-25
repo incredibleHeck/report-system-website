@@ -22,6 +22,28 @@ export interface School {
   headteacherId: string;
 }
 
+export interface AcademicYearDoc {
+  id: string;
+  academicYear: string;
+  name: string;
+  status: 'active' | 'upcoming' | 'completed' | 'archived';
+  isArchived?: boolean;
+  createdAt: string;
+}
+
+export interface AcademicTermDoc {
+  id: string;
+  academicYearId: string;
+  academicYear: string;
+  termCode: TermCode;
+  termNumber: number;
+  termName: string;
+  status: 'active' | 'upcoming' | 'completed';
+  startDate?: string;
+  endDate?: string;
+  createdAt: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -61,6 +83,8 @@ export interface ClassStream {
   subjectTeachers: SubjectAssignment[];
   settings: ClassSettings;
   activeClassId?: string;
+  academicYearId?: string;
+  academicYear?: string;
 }
 
 /** @deprecated alias kept for gradual migration */
@@ -121,6 +145,7 @@ export interface Student {
   status: StudentStatus;
   academicYear?: string;
   enrolledTerms?: TermCode[];
+  clubName?: string;
 }
 
 export interface SubjectLineSnapshot {
@@ -132,14 +157,52 @@ export interface SubjectLineSnapshot {
 
 export type MtEntryMode = 'split' | 'single';
 
+export interface SubjectMark {
+  id?: string;
+  studentId: string;
+  classId: string;
+  subjectCode: string;
+  clubName?: string;
+  mode?: ReportMode;
+  termKey?: string;
+  academicYear?: string;
+  cw1?: number | null;
+  cw2?: number | null;
+  cw3?: number | null;
+  cw4?: number | null;
+  cw5?: number | null;
+  cwTotal?: number;
+  cwScaled?: number;
+  mt1?: number | null;
+  mt2?: number | null;
+  mt3?: number | null;
+  mtSingle?: number | null;
+  mtRaw?: number;
+  mtScaled?: number;
+  exam?: number | null;
+  examScaled?: number;
+  totalScore: number;
+  grade: string;
+  comment?: string;
+}
+
 export interface AssessmentScore {
   id: string;
   studentId: string;
   classId: string;
   subjectCode: string;
+  clubName?: string;
   mode: ReportMode;
   termKey: string;
   academicYear: string;
+  /** Individual CW slots 1..5 out of 10 */
+  cw1?: number | null;
+  cw2?: number | null;
+  cw3?: number | null;
+  cw4?: number | null;
+  cw5?: number | null;
+  cwTotal?: number;
+  cwScaled?: number;
   /** Raw classwork marks, each out of 10 (blank/null → 0 when scaling). */
   cwRaw?: [
     number | null,
@@ -150,12 +213,19 @@ export interface AssessmentScore {
   ];
   /** Class-wide midterm entry shape forced on save. */
   mtEntryMode?: MtEntryMode;
+  mt1?: number | null;
+  mt2?: number | null;
+  mt3?: number | null;
+  mtSingle?: number | null;
+  mtRaw?: number;
+  mtScaled?: number;
   /** Raw midterm components out of 30 / 30 / 40 when mtEntryMode === 'split'. */
   mtRawSplit?: [number | null, number | null, number | null];
   /** Raw midterm out of 100 when mtEntryMode === 'single'. */
   mtRawSingle?: number | null;
   /** Raw exam out of 100 (scaled to /60 on the report). */
   examRaw?: number | null;
+  examScaled?: number;
   /** Scaled classwork contribution /20 (report). */
   cwScore?: number;
   /** Scaled midterm contribution /20 (report). */
@@ -177,6 +247,7 @@ export interface ReportSummary {
   id: string;
   studentId: string;
   classId: string;
+  clubName?: string;
   mode: ReportMode;
   termKey: string;
   academicYear: string;
