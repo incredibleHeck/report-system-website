@@ -8,6 +8,16 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/sais_users/$(request.auth.uid));
     }
 
+    // Get the user's role from the whitelist
+    function staffRole() {
+      return get(/databases/$(database)/documents/sais_users/$(request.auth.uid)).data.role;
+    }
+
+    function isHeadteacher() {
+      return isWhitelistedStaff() && staffRole() == 'headteacher';
+    }
+
+    // --- Staff whitelist ---
     match /sais_users/{userId} {
       // Users can read their own profile. Whitelisted staff can read all profiles to assign teachers.
       allow read: if isWhitelistedStaff() || (request.auth != null && request.auth.uid == userId);
@@ -20,9 +30,96 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    match /{document=**} {
-      // All other collections require the user to be on the staff whitelist
-      allow read, write: if isWhitelistedStaff();
+    // --- Schools ---
+    match /sais_schools/{schoolId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isHeadteacher();
     }
+
+    // --- Classes / Streams ---
+    match /sais_classes/{classId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isHeadteacher();
+    }
+
+    match /classStreams/{classId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isHeadteacher();
+    }
+
+    // --- Student data (scores, enrollments, contacts, summaries) ---
+    // All whitelisted staff can read; all whitelisted staff can write.
+    // (Future: scope writes to assigned classes via subjectTeacherIds / formTeacherId)
+    match /sais_scores/{scoreId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    match /sais_classEnrollments/{enrollmentId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    match /sais_lifelongStudents/{studentId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    match /sais_reportSummaries/{summaryId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    match /sais_contacts/{contactId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    // --- AI/comment context ---
+    match /sais_subject_contexts/{contextId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    match /sais_banned_tokens/{tokenId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    // --- System singletons (active class, key sequences) ---
+    match /sais_active_class/{docId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    match /sais_key_seq/{docId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    // --- System metadata (cache timestamps) ---
+    match /system/{docId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff();
+    }
+
+    // --- Academic year management ---
+    match /academicYears/{yearId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isHeadteacher();
+    }
+
+    match /terms/{termId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isHeadteacher();
+    }
+
+    match /systemSettings/{settingId} {
+      allow read: if isWhitelistedStaff();
+      allow write: if isHeadteacher();
+    }
+
+    // --- Deny-by-default: any unlisted collection is blocked ---
+    // (No wildcard match/{document=**} rule)
   }
 }

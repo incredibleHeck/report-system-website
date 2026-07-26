@@ -1,4 +1,4 @@
-import type { Programme, SubjectDefinition } from '../types';
+import type { Programme, SubjectDefinition, SubjectKind } from '../types';
 import { shouldIncludeProjectWork } from './term';
 
 const primarySubjects: SubjectDefinition[] = [

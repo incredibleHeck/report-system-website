@@ -148,8 +148,8 @@ export function calculateStreamOverviewAnalytics(
     const studentScores = scores.filter(
       (s) =>
         (s.studentId === st.id ||
-          s.studentKey === st.studentKey ||
-          s.studentKey === st.id ||
+          (s as any).studentKey === st.studentKey ||
+          (s as any).studentKey === st.id ||
           s.studentId === st.studentKey ||
           (s as any).legacyStudentId === st.studentId ||
           (s as any).legacyStudentId === st.id) &&

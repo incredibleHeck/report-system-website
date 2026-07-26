@@ -34,8 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const { app } = await import('../lib/firebase');
             const db = getFirestore(app);
 
-            // 1. Check users collection by UID
-            const userDocRef = doc(db, 'users', fbUser.uid);
+            // 1. Check sais_users collection by UID (matches firestore.rules and data layer)
+            const userDocRef = doc(db, 'sais_users', fbUser.uid);
             const userSnap = await getDoc(userDocRef);
 
             if (userSnap.exists()) {
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 email: fbUser.email || userData.email || '',
               });
             } else {
-              // Not found in users - unauthorized
+              // Not found in sais_users - unauthorized
               await signOut(auth);
               setCurrentUser(null);
               alert(`Unauthorized: Your account is not registered as active staff.`);

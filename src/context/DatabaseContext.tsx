@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useMemo,
+  useRef,
   ReactNode,
 } from 'react';
 import { 
@@ -1042,54 +1043,30 @@ export function DatabaseProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('schools', schools);
-  }, [schools, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('users', users);
-  }, [users, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('classes', classes);
-  }, [classes, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('lifelongStudents', lifelongStudents);
-  }, [lifelongStudents, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('enrollments', enrollments);
-  }, [enrollments, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('scores', scores);
-  }, [scores, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('summaries', summaries);
-  }, [summaries, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('contacts', contacts);
-  }, [contacts, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('subjectContexts', subjectContexts);
-  }, [subjectContexts, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('bannedTokens', bannedTokens);
-  }, [bannedTokens, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('activeClassId', activeClassId);
-  }, [activeClassId, dbReady]);
-  useEffect(() => {
-    if (!dbReady) return;
-    void activeRepository.saveCollection('keySeq', keySeq);
-  }, [keySeq, dbReady]);
+  function useSaveEffect<T>(collectionName: any, data: T, ready: boolean) {
+    const isInitialRender = useRef(true);
+    useEffect(() => {
+      if (!ready) return;
+      if (isInitialRender.current) {
+        isInitialRender.current = false;
+        return;
+      }
+      void activeRepository.saveCollection(collectionName, data);
+    }, [data, ready, collectionName]);
+  }
+
+  useSaveEffect('schools', schools, dbReady);
+  useSaveEffect('users', users, dbReady);
+  useSaveEffect('classes', classes, dbReady);
+  useSaveEffect('lifelongStudents', lifelongStudents, dbReady);
+  useSaveEffect('enrollments', enrollments, dbReady);
+  useSaveEffect('scores', scores, dbReady);
+  useSaveEffect('summaries', summaries, dbReady);
+  useSaveEffect('contacts', contacts, dbReady);
+  useSaveEffect('subjectContexts', subjectContexts, dbReady);
+  useSaveEffect('bannedTokens', bannedTokens, dbReady);
+  useSaveEffect('activeClassId', activeClassId, dbReady);
+  useSaveEffect('keySeq', keySeq, dbReady);
 
   const cascadeEnrollmentTeachers = (classId: string, cls: ClassStream) => {
     const academicYear = parseAcademicYear(cls.settings.termYearInfo);
@@ -1760,6 +1737,7 @@ export function useActiveClass() {
           map.set(key, {
             id: e.studentId,
             studentKey: e.studentKey || key,
+            studentId: e.rollNumber || e.studentId,
             name: l?.name || e.studentId,
             gender: l?.gender || 'Male',
             index: e.index || '001',
@@ -1781,6 +1759,7 @@ export function useActiveClass() {
         map.set(l.studentKey, {
           id: `SAISDAN05A${idxStr}`,
           studentKey: l.studentKey,
+          studentId: `SAISDAN05A${idxStr}`,
           name: l.name,
           gender: l.gender || 'Male',
           index: idxStr,

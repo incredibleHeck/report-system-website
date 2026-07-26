@@ -1,4 +1,5 @@
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,6 +13,89 @@ app.use(express.json({ limit: '25mb' }));
 
 const PORT = Number(process.env.PORT || 3001);
 
+// --- Firebase Admin SDK for auth verification ---
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
+
+let adminInitialized = false;
+try {
+  if (getApps().length === 0) {
+    const fs = await import('fs');
+    const saPath = path.join(__dirname, 'service-account.json');
+    if (fs.existsSync(saPath)) {
+      const sa = JSON.parse(fs.readFileSync(saPath, 'utf-8'));
+      initializeApp({ credential: cert(sa) });
+      adminInitialized = true;
+    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      initializeApp();
+      adminInitialized = true;
+    } else {
+      console.warn('[AUTH] No service-account.json or GOOGLE_APPLICATION_CREDENTIALS found. Auth middleware disabled.');
+    }
+  } else {
+    adminInitialized = true;
+  }
+} catch (err) {
+  console.warn('[AUTH] Firebase Admin init failed:', err);
+}
+
+// --- Rate limiting (in-memory, per IP) ---
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 60; // max requests per window
+
+function rateLimiter(req: Request, res: Response, next: NextFunction) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  let entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitMap.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: 'Too many requests. Try again later.' });
+  }
+  next();
+}
+
+// --- Auth middleware: verify Firebase ID token + whitelist check ---
+async function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!adminInitialized) {
+    // If admin SDK isn't available, skip auth (dev mode)
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid Authorization header' });
+  }
+
+  const idToken = authHeader.slice(7);
+  try {
+    const decoded = await getAuth().verifyIdToken(idToken);
+    const uid = decoded.uid;
+
+    // Check the sais_users whitelist
+    const userDoc = await getFirestore().collection('sais_users').doc(uid).get();
+    if (!userDoc.exists) {
+      return res.status(403).json({ error: 'User not in staff whitelist' });
+    }
+
+    // Attach user info for downstream handlers
+    (req as any).firebaseUser = decoded;
+    (req as any).staffDoc = userDoc.data();
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// Apply rate limiting and auth to all /api routes except /health
+app.use('/api', rateLimiter);
+
+
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -21,7 +105,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.post('/api/gemini', async (req, res) => {
+app.post('/api/gemini', requireAuth, async (req, res) => {
   try {
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
@@ -180,7 +264,7 @@ async function sendWhatsAppTemplate(params: {
   return { ok: true };
 }
 
-app.post('/api/whatsapp', async (req, res) => {
+app.post('/api/whatsapp', requireAuth, async (req, res) => {
   try {
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -275,7 +359,7 @@ app.post('/api/whatsapp', async (req, res) => {
   }
 });
 
-app.post('/api/email', async (req, res) => {
+app.post('/api/email', requireAuth, async (req, res) => {
   try {
     const { to, studentName, subject, pdfBase64, fileName } = req.body as {
       to: string;

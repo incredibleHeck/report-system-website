@@ -1,7 +1,26 @@
+import { getAuth } from 'firebase/auth';
+
+async function getAuthToken(): Promise<string | null> {
+  try {
+    const user = getAuth().currentUser;
+    if (user) {
+      return await user.getIdToken();
+    }
+  } catch {
+    // Auth not available — skip
+  }
+  return null;
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = await getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const res = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   });
   if (!res.ok) {

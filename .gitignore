@@ -39,53 +39,14 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-# Node modules
-node_modules/
-dist/
-dist-ssr/
-*.local
-
-# Editor folders
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# TypeScript
-*.tsbuildinfo
-
-# Build and Temp
-build/
-.cache/
-.parcel-cache/
-.turbo/
-.vercel/
-
-# Environment
-.env
-.env.development.local
-.env.test.local
-.env.production.local
 .env.local
 
 # Vite
-# vite.config.ts.timestamp-*
 *.timestamp-*
 
-# Firebase Service Account
+# Firebase
 service-account.json
 .firebase/
+
+# Data files — student PII must never be committed
+*.csv
