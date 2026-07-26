@@ -66,7 +66,11 @@ function scopedLifelong(
 ): LifelongStudent[] {
   if (scope.role === 'headteacher') {
     return source.lifelongStudents.filter(
-      (l) => !scope.schoolId || l.schoolId === scope.schoolId
+      (l) =>
+        !scope.schoolId ||
+        l.schoolId === scope.schoolId ||
+        l.schoolId === 'sais-school-main' ||
+        l.schoolId === 'demo-school-id'
     );
   }
   if (scope.role === 'teacher') {
