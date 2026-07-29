@@ -31,7 +31,7 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { canUndo, pop } = useUndo();
-  const { replaceScores, replaceSummaries, selectedAcademicYearId } = useDatabase();
+  const { replaceScores, replaceSummaries, selectedAcademicYearId, systemSettings } = useDatabase();
   const location = useLocation();
 
   const isGradeEntryPage =
@@ -279,7 +279,7 @@ export default function DashboardLayout() {
           </div>
           <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
             <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-bold shadow-2xs">
-              Academic Year: {selectedAcademicYearId || '2026/2027'} | Term: Term 1
+              {systemSettings?.currentTermYearInfo ? `Active: ${systemSettings.currentTermYearInfo}` : `Academic Year: ${selectedAcademicYearId || '2026-2027'} | Term: Term 1`}
             </span>
             <span>{currentUser.name}</span>
             <span className="text-slate-300">•</span>

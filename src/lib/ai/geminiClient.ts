@@ -18,16 +18,30 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(path, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || `Request failed (${res.status})`);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || `Request failed (${res.status})`);
+    }
+    return (await res.json()) as T;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('AI Proxy request timed out (15s limit). Please check network or try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json() as Promise<T>;
 }
 
 export type GeminiGenerateResult = {
@@ -62,9 +76,14 @@ export async function sendEmailPdf(payload: {
 }
 
 export function extractJsonArray<T = unknown>(text: string): T[] {
-  const cleaned = text.replace(/```json|```/g, '').trim();
-  const start = cleaned.indexOf('[');
-  const end = cleaned.lastIndexOf(']');
-  if (start === -1 || end === -1) throw new Error('No JSON array in model response');
-  return JSON.parse(cleaned.slice(start, end + 1)) as T[];
+  try {
+    const cleaned = text.replace(/```json|```/g, '').trim();
+    const start = cleaned.indexOf('[');
+    const end = cleaned.lastIndexOf(']');
+    if (start === -1 || end === -1) throw new Error('No JSON array found in model response');
+    return JSON.parse(cleaned.slice(start, end + 1)) as T[];
+  } catch (e) {
+    console.error('[GeminiClient] JSON Extraction Failed:', e, 'Raw Text:', text);
+    throw new Error('AI output format error: Unable to parse JSON array from model output.');
+  }
 }

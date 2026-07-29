@@ -15,7 +15,7 @@ const SAIS_DEFAULTS = {
 };
 
 export default function TranscriptDocument({ model, schoolName }: Props) {
-  const { student, blocks } = model;
+  const { student, blocks, cumulativeAverage, cumulativeGrade } = model;
   const name = schoolName || SAIS_DEFAULTS.name;
 
   return (
@@ -49,7 +49,7 @@ export default function TranscriptDocument({ model, schoolName }: Props) {
         </h2>
       </header>
 
-      <section className="mb-6 grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4 border border-sais-brown/30 rounded-lg p-3 bg-sais-brown/5">
+      <section className="mb-6 grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-4 border border-sais-brown/30 rounded-lg p-4 bg-sais-brown/5">
         <p>
           <span className="block text-xs uppercase tracking-wide text-sais-muted">Name</span>
           <span className="font-semibold text-sais-black">{student.name}</span>
@@ -66,6 +66,12 @@ export default function TranscriptDocument({ model, schoolName }: Props) {
           <span className="block text-xs uppercase tracking-wide text-sais-muted">Status</span>
           <span className="font-semibold capitalize text-sais-black">{student.status}</span>
         </p>
+        <p className="col-span-2 sm:col-span-4 border-t border-sais-brown/20 pt-2 mt-1">
+          <span className="inline-block text-xs uppercase tracking-wide text-sais-muted mr-3">Cumulative CGPA:</span>
+          <span className="font-semibold text-lg text-sais-black">
+            {cumulativeAverage > 0 ? `${cumulativeAverage} (${cumulativeGrade})` : '—'}
+          </span>
+        </p>
       </section>
 
       {blocks.length === 0 ? (
@@ -75,7 +81,7 @@ export default function TranscriptDocument({ model, schoolName }: Props) {
           {blocks.map((block) => (
             <section
               key={block.termKey + block.className}
-              className="term-block border border-sais-brown/30 rounded-lg overflow-hidden print:border-sais-brown/50"
+              className="term-block border border-sais-brown/30 rounded-lg overflow-hidden print:border-sais-brown/50 print:break-inside-avoid"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5 bg-sais-brown/10 border-b border-sais-brown/20">
                 <h3 className="text-base font-semibold text-sais-black">

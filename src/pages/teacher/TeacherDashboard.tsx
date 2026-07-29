@@ -46,15 +46,12 @@ export default function TeacherDashboard() {
     (cs) => normalizeYearId(getStreamYearId(cs)) === normalizeYearId(selectedAcademicYearId)
   );
 
-  const currentTermYearInfo = activeClass?.settings.termYearInfo || '2026/2027 — Term 1';
+  const currentTermYearInfo = activeClass?.settings?.termYearInfo || '2026/2027 — Term 1';
   const [, termPart] = currentTermYearInfo.split(' — ');
   const selectedTerm = termPart || 'Term 1';
 
   const handleYearChange = (newYear: string) => {
     setSelectedAcademicYearId(newYear);
-    if (activeClass) {
-      updateClassSettings(activeClass.id, { termYearInfo: `${newYear} — ${selectedTerm}` });
-    }
   };
 
   const handleTermChange = (newTerm: string) => {
@@ -74,11 +71,19 @@ export default function TeacherDashboard() {
   const [transferTarget, setTransferTarget] = useState<{ id: string; name: string } | null>(null);
   const [transferTerm, setTransferTerm] = useState<TermCode>('T1');
 
+  const computeNextIndex = () => {
+    const maxIndex = classStudents.reduce((max, s) => {
+      const parsed = parseInt(s.index || '0', 10);
+      return !isNaN(parsed) ? Math.max(max, parsed) : max;
+    }, 0);
+    return String(maxIndex + 1).padStart(3, '0');
+  };
+
   const handleAddStudent = (e: FormEvent) => {
     e.preventDefault();
     setError('');
     if (!activeClass || !studentId.trim() || !name.trim()) return;
-    const nextIndex = String(classStudents.length + 1).padStart(3, '0');
+    const nextIndex = computeNextIndex();
     try {
       addStudent({
         studentId: studentId.trim().toUpperCase(),
@@ -87,7 +92,7 @@ export default function TeacherDashboard() {
         index: nextIndex,
         classId: activeClass.id,
         schoolId: activeClass.schoolId,
-        attendance: activeClass.settings.attendanceTotal,
+        attendance: activeClass.settings?.attendanceTotal ?? 60,
         enrolledTerms: termsFromJoin(joinTerm),
       });
       setStudentId('');
@@ -102,7 +107,7 @@ export default function TeacherDashboard() {
     e.preventDefault();
     setError('');
     if (!activeClass || !existingKey.trim() || !studentId.trim()) return;
-    const nextIndex = String(classStudents.length + 1).padStart(3, '0');
+    const nextIndex = computeNextIndex();
     try {
       enrollExistingStudent({
         studentKey: existingKey.trim().toUpperCase(),
@@ -147,7 +152,7 @@ export default function TeacherDashboard() {
   }
 
   const subjects = activeClass
-    ? getSubjectsForTerm(activeClass.programme, activeClass.settings.termYearInfo)
+    ? getSubjectsForTerm(activeClass.programme, activeClass.settings?.termYearInfo || '2026/2027 — Term 1')
     : [];
 
   return (
@@ -183,11 +188,15 @@ export default function TeacherDashboard() {
               value={activeClass?.id || ''}
               onChange={(e) => setActiveClassId(e.target.value)}
             >
-              {displayStreams.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.programme})
-                </option>
-              ))}
+              {displayStreams.length === 0 ? (
+                <option value="">No streams in {selectedAcademicYearId}</option>
+              ) : (
+                displayStreams.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.programme})
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

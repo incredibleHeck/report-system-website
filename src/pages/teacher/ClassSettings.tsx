@@ -1,8 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useActiveClass, useDatabase } from '../../context/DatabaseContext';
+import { useAuth } from '../../context/AuthContext';
 import { detectTermNumber, shouldIncludeProjectWork } from '../../lib/term';
 
 export default function ClassSettings() {
+  const { currentUser } = useAuth();
   const { activeClass } = useActiveClass();
   const { updateClassSettings } = useDatabase();
   const [form, setForm] = useState(activeClass?.settings);
@@ -15,20 +17,51 @@ export default function ClassSettings() {
     return <p className="text-slate-500">Select a class from the teacher dashboard first.</p>;
   }
 
+  const isHeadteacher = currentUser?.role === 'headteacher';
+  const isFormTeacher = Boolean(
+    currentUser?.id &&
+      (activeClass.teacherId === currentUser.id ||
+        (activeClass as any).formTeacherId === currentUser.id ||
+        isHeadteacher)
+  );
+
+  if (!isFormTeacher) {
+    return (
+      <div className="max-w-2xl bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-6 shadow-sm space-y-2">
+        <h1 className="text-xl font-bold font-display">Access Restricted</h1>
+        <p className="text-sm">
+          Class settings can only be edited by the assigned Form Teacher ({activeClass.settings?.teacherName || 'Form Teacher'}) or a Headteacher.
+        </p>
+      </div>
+    );
+  }
+
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
 
   const termNum = detectTermNumber(form.termYearInfo);
   const projectOn = shouldIncludeProjectWork(form.termYearInfo);
 
+  // Parse structured term parameters
+  const [yearPart, termPart] = (form.termYearInfo || '2026/2027 — Term 1').split(' — ');
+  const selectedYear = yearPart || '2026/2027';
+  const selectedTerm = termPart || 'Term 1';
+
+  const handleYearChange = (newYear: string) => {
+    set('termYearInfo', `${newYear} — ${selectedTerm}`);
+  };
+
+  const handleTermChange = (newTerm: string) => {
+    set('termYearInfo', `${selectedYear} — ${newTerm}`);
+  };
+
   const onSave = (e: FormEvent) => {
     e.preventDefault();
     updateClassSettings(activeClass.id, {
       ...form,
-      // Keep flag in sync with Term 3 rule for any legacy readers
       showProjectWork: shouldIncludeProjectWork(form.termYearInfo),
     });
-    alert('Class settings saved');
+    alert('Class settings saved successfully');
   };
 
   return (
@@ -41,19 +74,39 @@ export default function ClassSettings() {
       </div>
 
       <form onSubmit={onSave} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow duration-200 space-y-5">
-        <label className="block text-sm font-medium text-sais-black">
-          <span className="text-sais-muted">Term / Academic Year</span>
-          <input
-            className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs"
-            value={form.termYearInfo}
-            onChange={(e) => set('termYearInfo', e.target.value)}
-            placeholder="e.g. 2025/2026 — Term 2"
-          />
-          <p className="text-xs text-sais-muted mt-1.5 font-normal">
-            Detected term: {termNum ? `Term ${termNum}` : 'unknown'} · Project Work on EOT report:{' '}
-            <strong className="text-sais-black">{projectOn ? 'Yes (Term 3 only)' : 'No (Terms 1 & 2)'}</strong>
-          </p>
-        </label>
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-sais-black">
+            <span className="text-sais-muted">Academic Year & Term</span>
+            <div className="grid grid-cols-2 gap-3 mt-1.5">
+              <select
+                className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs font-semibold"
+                value={selectedYear}
+                onChange={(e) => handleYearChange(e.target.value)}
+              >
+                <option value="2026/2027">2026/2027 (Active Pointer)</option>
+                <option value="2025/2026">2025/2026</option>
+                <option value="2024/2025">2024/2025</option>
+                <option value="2023/2024">2023/2024</option>
+                <option value="2022/2023">2022/2023</option>
+                <option value="2021/2022">2021/2022</option>
+              </select>
+
+              <select
+                className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs font-semibold"
+                value={selectedTerm}
+                onChange={(e) => handleTermChange(e.target.value)}
+              >
+                <option value="Term 1">Term 1</option>
+                <option value="Term 2">Term 2</option>
+                <option value="Term 3">Term 3</option>
+              </select>
+            </div>
+            <p className="text-xs text-sais-muted mt-1.5 font-normal">
+              Detected term: {termNum ? `Term ${termNum}` : 'unknown'} · Project Work on EOT report:{' '}
+              <strong className="text-sais-black">{projectOn ? 'Yes (Term 3 only)' : 'No (Terms 1 & 2)'}</strong>
+            </p>
+          </label>
+        </div>
 
         {(
           [
@@ -111,3 +164,4 @@ export default function ClassSettings() {
     </div>
   );
 }
+

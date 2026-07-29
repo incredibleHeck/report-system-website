@@ -46,6 +46,8 @@ export type TranscriptTermBlock =
 export type TranscriptDocumentModel = {
   student: LifelongStudent;
   blocks: TranscriptTermBlock[];
+  cumulativeAverage: number;
+  cumulativeGrade: string;
 };
 
 export type TranscriptDataSource = {
@@ -160,7 +162,12 @@ export async function buildTranscript(
     };
   });
 
-  return { student: multiYear.student, blocks };
+  return { 
+    student: multiYear.student, 
+    blocks,
+    cumulativeAverage: multiYear.cumulativeAverage,
+    cumulativeGrade: multiYear.cumulativeGrade,
+  };
 }
 
 export function termHeading(academicYear: string, termCode: TermCode): string {

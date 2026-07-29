@@ -546,7 +546,7 @@ async function reingestYear5AMarks(chunker) {
       const matchedStudent = await resolveOrRegisterStudent(studentName, y5aStudentsMap, chunker, academicYearId, classId);
 
       const studentKey = matchedStudent.studentKey;
-      const termKey = `${academicYear}_${tFile.termCode}`;
+      const termKey = `${academicYearId}-${tFile.termCode}`;
       const termId = tFile.termId;
       const subjectLines = [];
 

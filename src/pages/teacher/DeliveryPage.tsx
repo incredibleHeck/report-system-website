@@ -25,6 +25,8 @@ export default function DeliveryPage() {
   const [mode, setMode] = useState<ReportMode>('EOT');
   const [log, setLog] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SENT' | 'FAILED' | 'PENDING'>('ALL');
   const [progress, setProgress] = useState<ProgressState>({
     phase: null,
     current: 0,
@@ -46,6 +48,29 @@ export default function DeliveryPage() {
       getSubjectsForTerm(activeClass.programme, activeClass.settings.termYearInfo).map((s) => s.code)
     );
   }, [classScores, activeClass]);
+
+  const filteredStudents = useMemo(() => {
+    return classStudents.filter((st) => {
+      const matchSearch =
+        st.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        st.studentId.toLowerCase().includes(searchQuery.toLowerCase());
+      if (!matchSearch) return false;
+
+      if (statusFilter === 'ALL') return true;
+      const c = contacts.find((x) => x.studentId === st.id && x.classId === activeClass?.id);
+      const waOk = c?.whatsappStatus === 'SENT';
+      const emOk = c?.emailStatus === 'SENT' || c?.emailStatus?.startsWith('SENT');
+      const isSent = waOk || emOk;
+      const isFailed =
+        (c?.whatsappStatus && !waOk && c.whatsappStatus !== 'PDF_READY' && c.whatsappStatus !== 'MIDTERM_READY') ||
+        (c?.emailStatus && !emOk && c.emailStatus !== 'PDF_READY' && c.emailStatus !== 'MIDTERM_READY');
+
+      if (statusFilter === 'SENT') return isSent;
+      if (statusFilter === 'FAILED') return isFailed;
+      if (statusFilter === 'PENDING') return !isSent && !isFailed;
+      return true;
+    });
+  }, [classStudents, searchQuery, statusFilter, contacts, activeClass]);
 
   if (!activeClass || !school) return <p className="text-slate-500">No active class.</p>;
 
@@ -168,22 +193,24 @@ export default function DeliveryPage() {
     }
   };
 
-  const sendEmailBatch = async () => {
+  const sendEmailBatch = async (targets?: typeof classStudents) => {
+    const list = targets || classStudents;
+    if (!list.length) return;
     setBusy(true);
     setProgress({
       phase: 'email',
       current: 0,
-      total: classStudents.length,
-      label: 'Sending email batch…',
+      total: list.length,
+      label: `Sending email batch (${list.length})…`,
     });
     try {
-      for (let i = 0; i < classStudents.length; i++) {
-        const st = classStudents[i];
+      for (let i = 0; i < list.length; i++) {
+        const st = list[i];
         setProgress({
           phase: 'email',
           current: i + 1,
-          total: classStudents.length,
-          label: `${i + 1} / ${classStudents.length} — ${st.name}`,
+          total: list.length,
+          label: `${i + 1} / ${list.length} — ${st.name}`,
         });
         const contact = contacts.find((c) => c.studentId === st.id && c.classId === activeClass.id);
         if (!contact?.email) {
@@ -223,22 +250,24 @@ export default function DeliveryPage() {
     }
   };
 
-  const sendWhatsAppBatch = async () => {
+  const sendWhatsAppBatch = async (targets?: typeof classStudents) => {
+    const list = targets || classStudents;
+    if (!list.length) return;
     setBusy(true);
     setProgress({
       phase: 'whatsapp',
       current: 0,
-      total: classStudents.length,
-      label: 'Sending WhatsApp batch…',
+      total: list.length,
+      label: `Sending WhatsApp batch (${list.length})…`,
     });
     try {
-      for (let i = 0; i < classStudents.length; i++) {
-        const st = classStudents[i];
+      for (let i = 0; i < list.length; i++) {
+        const st = list[i];
         setProgress({
           phase: 'whatsapp',
           current: i + 1,
-          total: classStudents.length,
-          label: `${i + 1} / ${classStudents.length} — ${st.name}`,
+          total: list.length,
+          label: `${i + 1} / ${list.length} — ${st.name}`,
         });
         const contact = contacts.find((c) => c.studentId === st.id && c.classId === activeClass.id);
         const phone = contact?.phone ? normalizeGhanaPhone(contact.phone) : null;
@@ -278,6 +307,23 @@ export default function DeliveryPage() {
     }
   };
 
+  const retryFailedDispatches = (channel: 'email' | 'whatsapp') => {
+    const failedTargets = classStudents.filter((st) => {
+      const c = contacts.find((x) => x.studentId === st.id && x.classId === activeClass.id);
+      if (channel === 'email') {
+        return !c?.emailStatus || c.emailStatus !== 'SENT' && !c.emailStatus.startsWith('SENT');
+      } else {
+        return !c?.whatsappStatus || c.whatsappStatus !== 'SENT';
+      }
+    });
+    if (!failedTargets.length) {
+      alert(`No failed ${channel} dispatches found to retry!`);
+      return;
+    }
+    if (channel === 'email') sendEmailBatch(failedTargets);
+    else sendWhatsAppBatch(failedTargets);
+  };
+
   const pct =
     progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
@@ -310,17 +356,31 @@ export default function DeliveryPage() {
           </button>
           <button
             disabled={busy}
-            onClick={sendEmailBatch}
-            className="rounded-lg bg-sais-brown text-white px-4 py-2 text-sm disabled:opacity-50"
+            onClick={() => sendEmailBatch()}
+            className="rounded-lg bg-sais-brown text-white px-3 py-2 text-sm disabled:opacity-50"
           >
             Send Email Batch
           </button>
           <button
             disabled={busy}
-            onClick={sendWhatsAppBatch}
-            className="rounded-lg bg-sais-red text-white px-4 py-2 text-sm disabled:opacity-50"
+            onClick={() => sendWhatsAppBatch()}
+            className="rounded-lg bg-sais-red text-white px-3 py-2 text-sm disabled:opacity-50"
           >
             Send WhatsApp Batch
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => retryFailedDispatches('email')}
+            className="rounded-lg border border-amber-600 bg-amber-50 text-amber-900 px-3 py-2 text-sm font-medium disabled:opacity-50 hover:bg-amber-100"
+          >
+            ↺ Retry Failed Emails
+          </button>
+          <button
+            disabled={busy}
+            onClick={() => retryFailedDispatches('whatsapp')}
+            className="rounded-lg border border-rose-600 bg-rose-50 text-rose-900 px-3 py-2 text-sm font-medium disabled:opacity-50 hover:bg-rose-100"
+          >
+            ↺ Retry Failed WhatsApp
           </button>
         </div>
       </div>
@@ -340,6 +400,30 @@ export default function DeliveryPage() {
         </div>
       )}
 
+      {/* Filter and Search controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 border border-slate-200 rounded-xl">
+        <input
+          type="text"
+          placeholder="Search student by name or ID…"
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm min-w-[240px]"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        <div className="flex items-center gap-2 text-xs">
+          <span className="font-medium text-slate-600">Filter Status:</span>
+          <select
+            className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-slate-50"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+          >
+            <option value="ALL">All ({classStudents.length})</option>
+            <option value="SENT">Sent</option>
+            <option value="FAILED">Failed / Issues</option>
+            <option value="PENDING">Pending / Ready</option>
+          </select>
+        </div>
+      </div>
+
       <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl">
         <table className="min-w-full text-sm">
           <thead className="bg-sais-cream">
@@ -352,7 +436,7 @@ export default function DeliveryPage() {
             </tr>
           </thead>
           <tbody>
-            {classStudents.map((st) => {
+            {filteredStudents.map((st) => {
               const c = contacts.find((x) => x.studentId === st.id && x.classId === activeClass.id);
               const waOk = c?.whatsappStatus === 'SENT';
               const emOk = c?.emailStatus === 'SENT' || c?.emailStatus?.startsWith('SENT');

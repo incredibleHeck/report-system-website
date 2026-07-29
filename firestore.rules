@@ -48,16 +48,31 @@ service cloud.firestore {
     }
 
     // --- Student data (scores, enrollments, contacts, summaries) ---
-    // All whitelisted staff can read; all whitelisted staff can write.
-    // (Future: scope writes to assigned classes via subjectTeacherIds / formTeacherId)
+    function isFormTeacher(classId) {
+      return get(/databases/$(database)/documents/classStreams/$(classId)).data.teacherId == request.auth.uid;
+    }
+
+    function isSubjectTeacher(subjectCode) {
+      return subjectCode in get(/databases/$(database)/documents/sais_users/$(request.auth.uid)).data.subjects;
+    }
+
+    function isYearArchived(yearString) {
+      let yearId = yearString.replace('/', '-');
+      let doc = get(/databases/$(database)/documents/academicYears/$(yearId));
+      return doc != null && doc.data.status == 'archived';
+    }
+
     match /sais_scores/{scoreId} {
       allow read: if isWhitelistedStaff();
-      allow write: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff() && (
+        isHeadteacher() || 
+        (!isYearArchived(request.resource.data.academicYear) && (isFormTeacher(request.resource.data.classId) || isSubjectTeacher(request.resource.data.subjectCode)))
+      );
     }
 
     match /sais_classEnrollments/{enrollmentId} {
       allow read: if isWhitelistedStaff();
-      allow write: if isWhitelistedStaff();
+      allow write: if isHeadteacher() || isFormTeacher(request.resource.data.classId);
     }
 
     match /sais_lifelongStudents/{studentId} {
@@ -67,7 +82,10 @@ service cloud.firestore {
 
     match /sais_reportSummaries/{summaryId} {
       allow read: if isWhitelistedStaff();
-      allow write: if isWhitelistedStaff();
+      allow write: if isWhitelistedStaff() && (
+        isHeadteacher() || 
+        (!isYearArchived(request.resource.data.academicYear) && isFormTeacher(request.resource.data.classId))
+      );
     }
 
     match /sais_contacts/{contactId} {

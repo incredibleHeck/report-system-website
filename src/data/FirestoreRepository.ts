@@ -26,6 +26,7 @@ const COLLECTION_MAP: Record<SnapshotCollection, string> = {
   bannedTokens: STORAGE_KEYS.bannedTokens,
   activeClassId: STORAGE_KEYS.activeClass,
   keySeq: STORAGE_KEYS.keySeq,
+  systemSettings: 'systemSettings',
 };
 
 // --- IDB Wrapper for Local Caching ---
@@ -130,7 +131,7 @@ export class FirestoreRepository implements DatabaseRepository {
       const remoteTime = remoteMetadata[`lastUpdated_${key}`] || 0;
       const localTime = localMetadata[`lastUpdated_${key}`] || -1;
 
-      if (localSnapshot[key] && localTime >= remoteTime) {
+      if (localSnapshot[key] && localTime >= remoteTime && key !== 'systemSettings') {
         // Cache hit
         result[key] = localSnapshot[key];
       } else {
@@ -148,7 +149,9 @@ export class FirestoreRepository implements DatabaseRepository {
         const key = collectionsToFetch[i];
         const data = fetchedData[i];
         if (key === 'activeClassId' || key === 'keySeq') {
-          result[key] = data[0]?.value ?? (key === 'activeClassId' ? null : {});
+          result[key] = data && data.length > 0 ? data[0] : null;
+        } else if (key === 'systemSettings') {
+          result[key] = data && data.length > 0 ? data.find((d: any) => d.id === 'active') || data[0] : null;
         } else {
           result[key] = data;
         }
@@ -166,7 +169,7 @@ export class FirestoreRepository implements DatabaseRepository {
     for (const key of keys) {
       this.buildMap(
         key, 
-        key === 'activeClassId' || key === 'keySeq' 
+        (key === 'activeClassId' || key === 'keySeq' || key === 'systemSettings')
           ? [{ value: finalSnapshot[key] }] 
           : (finalSnapshot[key] as any[])
       );
@@ -184,11 +187,12 @@ export class FirestoreRepository implements DatabaseRepository {
     
     let hasChanges = false;
 
-    if (key === 'activeClassId' || key === 'keySeq') {
-      const oldVal = map.get('singleton')?.value;
+    if (key === 'activeClassId' || key === 'keySeq' || key === 'systemSettings') {
+      const docName = key === 'systemSettings' ? 'active' : 'singleton';
+      const oldVal = map.get(docName)?.value;
       if (JSON.stringify(oldVal) !== JSON.stringify(value)) {
-        await setDoc(doc(db, path, 'singleton'), { value }, { merge: true });
-        map.set('singleton', { value });
+        await setDoc(doc(db, path, docName), key === 'systemSettings' ? (value || {}) : { value }, { merge: true });
+        map.set(docName, { value });
         hasChanges = true;
       }
     } else {

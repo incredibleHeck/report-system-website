@@ -61,6 +61,7 @@ export default function HeadteacherDashboard() {
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
   const [teacherName, setTeacherName] = useState('');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
   const [className, setClassName] = useState('');
   const [programme, setProgramme] = useState<Programme>('PRIMARY');
   const [formTeacherId, setFormTeacherId] = useState('');
@@ -151,24 +152,31 @@ export default function HeadteacherDashboard() {
     setSelectedSubjects([]);
   };
 
-  const handleCreateClass = (e: FormEvent) => {
+  const handleCreateClass = async (e: FormEvent) => {
     e.preventDefault();
     if (!className.trim() || !formTeacherId) return;
-    const schoolId = ensureSchool();
-    const classId = createClass({
-      name: className.trim().toUpperCase(),
-      schoolId,
-      programme,
-      teacherId: formTeacherId,
-      settings: {
-        teacherName: getTeacherDisplayName(teachers.find((t) => t.id === formTeacherId)),
-      },
-    });
-    for (const sub of getSubjectsForProgramme(programme)) {
-      assignSubjectTeacher(classId, sub.code, formTeacherId);
+    setIsCreating(true);
+    try {
+      const schoolId = ensureSchool();
+      const classId = createClass({
+        name: className.trim().toUpperCase(),
+        schoolId,
+        programme,
+        teacherId: formTeacherId,
+        settings: {
+          teacherName: getTeacherDisplayName(teachers.find((t) => t.id === formTeacherId)),
+        },
+      });
+      for (const sub of getSubjectsForProgramme(programme)) {
+        assignSubjectTeacher(classId, sub.code, formTeacherId);
+      }
+      // Brief delay to allow React state flush and useSaveEffect to trigger
+      await new Promise(r => setTimeout(r, 400));
+      setClassName('');
+      setManageClassId(classId);
+    } finally {
+      setIsCreating(false);
     }
-    setClassName('');
-    setManageClassId(classId);
   };
 
   const handleFormTeacherChange = (classId: string, teacherId: string) => {
@@ -401,8 +409,12 @@ export default function HeadteacherDashboard() {
                 </option>
               ))}
             </select>
-            <button type="submit" className="w-full rounded-xl bg-sais-red text-white px-4 py-2.5 text-sm font-semibold hover:bg-sais-red-dark active:scale-[0.98] transition-all shadow-xs">
-              Create Class
+            <button 
+              type="submit" 
+              disabled={!className.trim() || !formTeacherId || isCreating}
+              className="w-full rounded-xl bg-sais-red text-white px-4 py-2.5 text-sm font-semibold hover:bg-sais-red-dark active:scale-[0.98] transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreating ? 'Creating Class...' : 'Create Class'}
             </button>
           </form>
         </section>

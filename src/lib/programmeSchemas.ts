@@ -12,6 +12,7 @@ const primarySubjects: SubjectDefinition[] = [
   { code: 'MUSIC', name: 'Music', kind: 'scoreOnly', abbr: 'MUSIC' },
   { code: 'PROJ', name: 'Project Work', kind: 'scoreOnly', abbr: 'PROJ' },
   { code: 'PE', name: 'Physical Education', kind: 'commentOnly', abbr: 'PE' },
+  { code: 'CLUB', name: 'Club', kind: 'commentOnly', abbr: 'CLUB' },
 ];
 
 const lowerSecondarySubjects: SubjectDefinition[] = [

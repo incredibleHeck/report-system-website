@@ -190,44 +190,42 @@ export default function EotReportCard({
       {/* Marks table */}
       <table
         className="w-full border-collapse"
-        style={{ fontSize: '9.5px', marginBottom: 4, tableLayout: 'fixed' }}
+        style={{ fontSize: '10px', marginBottom: 4, tableLayout: 'fixed' }}
       >
         <colgroup>
-          <col style={{ width: '11%' }} />
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '2%' }} />
-          <col style={{ width: '9%' }} />
-          <col style={{ width: '8%' }} />
-          <col style={{ width: '7%' }} />
-          <col style={{ width: '5%' }} />
-          <col style={{ width: '44%' }} />
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '5.5%' }} />
+          <col style={{ width: '5.5%' }} />
+          <col style={{ width: '6.5%' }} />
+          <col style={{ width: '5.5%' }} />
+          <col style={{ width: '5.5%' }} />
+          <col style={{ width: '4.5%' }} />
+          <col style={{ width: '57%' }} />
         </colgroup>
         <thead>
-          <tr style={{ background: '#5a5a5a', color: '#fff' }}>
-            <th className={`${cell} text-left font-bold`} style={{ color: '#fff' }}>
+          <tr style={{ background: '#6b6b6b', color: '#ffffff' }}>
+            <th className={`${cell} text-left font-bold`} style={{ color: '#ffffff' }}>
               Subject
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#fff', fontSize: '8px' }}>
+            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
               Class Score (20)
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#fff', fontSize: '8px' }}>
+            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
               Mid Term Score (20)
             </th>
-            <th className={cell} style={{ background: '#5a5a5a' }} />
-            <th className={`${cellCenter} font-bold`} style={{ color: '#fff', fontSize: '8px' }}>
+            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
               End of Term Exams Score (60)
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#fff', fontSize: '8px' }}>
+            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
               Total Score (100)
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#fff' }}>
+            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
               Class Average
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#fff' }}>
+            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '8px' }}>
               Grade
             </th>
-            <th className={`${cell} text-center font-bold`} style={{ color: '#fff' }}>
+            <th className={`${cell} text-center font-bold`} style={{ color: '#ffffff' }}>
               Subject Teacher&apos;s Comment
             </th>
           </tr>
@@ -252,8 +250,7 @@ export default function EotReportCard({
                   <td className={inactive} />
                   <td className={inactive} />
                   <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={`${cell} text-left align-top`} style={{ lineHeight: 1.25 }}>
+                  <td className={`${cell} text-left align-top`} style={{ fontSize: '12px', lineHeight: 1.25 }}>
                     {comment}
                   </td>
                 </tr>
@@ -267,13 +264,12 @@ export default function EotReportCard({
                   <td className={inactive} />
                   <td className={inactive} />
                   <td className={inactive} />
-                  <td className={inactive} />
                   <td className={cellCenter}>{fmt(sc?.totalScore)}</td>
                   <td className={cellCenter}>
                     {fmt(classAverages[sub.code] ?? sc?.classAverage)}
                   </td>
                   <td className={`${cellCenter} font-bold`}>{sc?.grade ?? ''}</td>
-                  <td className={`${cell} text-left align-top`} style={{ lineHeight: 1.25 }}>
+                  <td className={`${cell} text-left align-top`} style={{ fontSize: '12px', lineHeight: 1.25 }}>
                     {comment}
                   </td>
                 </tr>
@@ -285,14 +281,13 @@ export default function EotReportCard({
                 <td className={`${cell} font-bold`}>{sub.name}</td>
                 <td className={cellCenter}>{fmt(sc?.cwScore)}</td>
                 <td className={cellCenter}>{fmt(sc?.mtScore)}</td>
-                <td className={cell} />
                 <td className={cellCenter}>{fmt(sc?.eotScore)}</td>
                 <td className={cellCenter}>{fmt(sc?.totalScore)}</td>
                 <td className={cellCenter}>
                   {fmt(classAverages[sub.code] ?? sc?.classAverage)}
                 </td>
                 <td className={`${cellCenter} font-bold`}>{sc?.grade ?? ''}</td>
-                <td className={`${cell} text-left align-top`} style={{ lineHeight: 1.25 }}>
+                <td className={`${cell} text-left align-top`} style={{ fontSize: '12px', lineHeight: 1.25 }}>
                   {comment}
                 </td>
               </tr>
@@ -425,15 +420,15 @@ export default function EotReportCard({
           >
             <div
               style={{
-                fontSize: '16px',
+                fontSize: '15px',
                 fontWeight: 700,
                 textAlign: 'center',
                 letterSpacing: '0.02em',
+                lineHeight: 1.3,
               }}
             >
               {teacherName.toUpperCase()}
             </div>
-            <div style={{ marginTop: 8, fontSize: '9px', color: '#333' }}>Class Teacher</div>
           </div>
         </div>
       </div>

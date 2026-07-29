@@ -1,15 +1,17 @@
 import { detectTermNumber } from './term';
 import type { TermCode } from '../types';
 
+export type CanonicalTermKey = string & { readonly __brand: unique symbol };
+
 /** Extract academic year as 2025_2026 from settings text */
 export function parseAcademicYear(termYearInfo: string, fallback = '2025_2026'): string {
-  const m = (termYearInfo || '').match(/(\d{4})\s*\/\s*(\d{4})/);
+  const m = (termYearInfo || '').match(/(\d{4})\s*[\/\-_]\s*(\d{4})/);
   if (m) return `${m[1]}_${m[2]}`;
   return fallback;
 }
 
 export function academicYearLabel(academicYear: string): string {
-  return academicYear.replace('_', ' / ');
+  return academicYear.replace('_', ' / ').replace('-', ' / ');
 }
 
 export function termCodeFromNumber(n: 1 | 2 | 3 | null): TermCode | null {
@@ -23,26 +25,63 @@ export function termNumberFromCode(code: TermCode): 1 | 2 | 3 {
   return code === 'T1' ? 1 : code === 'T2' ? 2 : 3;
 }
 
-/** Canonical termKey: 2025_2026_T1 */
-export function buildTermKey(academicYear: string, term: TermCode | 1 | 2 | 3): string {
-  const code =
-    typeof term === 'number' ? (termCodeFromNumber(term) as TermCode) : term;
-  return `${academicYear}_${code}`;
+/** Canonical termKey: 2025-2026-T1 */
+export function toCanonicalTermKey(
+  academicYear: string,
+  term: TermCode | 1 | 2 | 3 | string
+): CanonicalTermKey {
+  const yearStr = (academicYear || '')
+    .replace(/[\/\\]/g, '-')
+    .replace(/_/g, '-')
+    .trim();
+  
+  let code = term;
+  if (typeof term === 'number') {
+    code = termCodeFromNumber(term) as TermCode;
+  } else if (typeof term === 'string') {
+    const termMatch = term.match(/T([123])/i);
+    if (termMatch) {
+      code = `T${termMatch[1]}`.toUpperCase() as TermCode;
+    } else {
+      const n = detectTermNumber(term);
+      code = termCodeFromNumber(n) || 'T1';
+    }
+  }
+  return `${yearStr}-${code}` as CanonicalTermKey;
+}
+
+export function buildTermKey(
+  academicYear: string,
+  term: TermCode | 1 | 2 | 3 | string
+): CanonicalTermKey {
+  return toCanonicalTermKey(academicYear, term);
 }
 
 export function parseTermKey(termKey: string): {
   academicYear: string;
   termCode: TermCode | null;
 } {
-  const m = termKey.match(/^(\d{4}_\d{4})_(T[123])$/i);
-  if (m) {
-    return { academicYear: m[1], termCode: m[2].toUpperCase() as TermCode };
+  if (!termKey) {
+    return { academicYear: '2025_2026', termCode: null };
   }
+
+  const termMatch = termKey.match(/T([123])/i);
+  let termCode: TermCode | null = termMatch ? (`T${termMatch[1]}`.toUpperCase() as TermCode) : null;
+  
+  if (!termCode) {
+    const n = detectTermNumber(termKey);
+    termCode = termCodeFromNumber(n);
+  }
+
   const year = parseAcademicYear(termKey, '');
-  const n = detectTermNumber(termKey);
+
+  if (!termCode) {
+    console.warn(`[TermKey Warning] Unrecognized termKey structure: "${termKey}". Skipping silent assignment.`);
+  }
+
   return {
     academicYear: year || '2025_2026',
-    termCode: termCodeFromNumber(n),
+    termCode,
   };
 }
 

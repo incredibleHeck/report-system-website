@@ -30,8 +30,13 @@ export default function MidtermReportCard({
 
   return (
     <div
-      className="midterm-report bg-white text-black p-6 w-[1000px]"
-      style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+      className="midterm-report bg-white text-black p-6"
+      style={{
+        width: '1100px',
+        maxWidth: '1100px',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        boxSizing: 'border-box',
+      }}
     >
       <div className="text-center border-b-2 border-black pb-3 mb-3">
         <h1 className="text-2xl font-bold uppercase">{school.name}</h1>

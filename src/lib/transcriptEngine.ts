@@ -1,4 +1,4 @@
-import { academicYearLabel, buildTermKey, termNumberFromCode } from './academicYear';
+import { academicYearLabel, buildTermKey, termNumberFromCode, toCanonicalTermKey, parseTermKey } from './academicYear';
 import type {
   ClassEnrollment,
   LifelongStudent,
@@ -103,16 +103,19 @@ export function buildMultiYearTranscript(
     );
 
     for (const termCode of termCodes) {
-      const termKey = buildTermKey(en.academicYear, termCode);
+      const termKey = toCanonicalTermKey(en.academicYear, termCode);
       const termNum = termNumberFromCode(termCode);
 
-      const summary = source.summaries.find(
-        (s) =>
-          (s.studentId === en.studentId || s.studentId === student.id || s.studentId === en.rollNumber) &&
-          (s.academicYear === en.academicYear || s.termKey.includes(en.academicYear.replace('/', '_'))) &&
-          s.termKey === termKey &&
-          s.mode === 'EOT'
-      );
+      const summary = source.summaries.find((s) => {
+        const matchesStudent = s.studentId === en.studentId || s.studentId === student.id || s.studentId === en.rollNumber;
+        if (!matchesStudent || s.mode !== 'EOT') return false;
+        
+        // Use parseTermKey to extract the actual year/term from the summary's termKey, 
+        // then normalize it to compare against our generated canonical termKey.
+        const parsed = parseTermKey(s.termKey);
+        const sCanonical = toCanonicalTermKey(s.academicYear || parsed.academicYear, parsed.termCode || 'T1');
+        return sCanonical === termKey;
+      });
 
       blocks.push({
         academicYear: en.academicYear,
@@ -137,11 +140,22 @@ export function buildMultiYearTranscript(
     }
   }
 
-  // Calculate Cumulative Performance Stats
+  // Calculate Cumulative Performance Stats (Weighted by subjects)
   const completedBlocks = blocks.filter((b) => b.averageScore !== null && b.averageScore > 0);
   const totalTermsCompleted = completedBlocks.length;
-  const sumAverage = completedBlocks.reduce((sum, b) => sum + (b.averageScore || 0), 0);
-  const cumulativeAverage = totalTermsCompleted > 0 ? Number((sumAverage / totalTermsCompleted).toFixed(2)) : 0;
+  
+  let totalScoreSum = 0;
+  let totalSubjectsCount = 0;
+  
+  for (const b of completedBlocks) {
+    const numSubs = b.subjectLines?.length || 0;
+    if (numSubs > 0 && b.averageScore !== null) {
+      totalScoreSum += (b.averageScore * numSubs);
+      totalSubjectsCount += numSubs;
+    }
+  }
+  
+  const cumulativeAverage = totalSubjectsCount > 0 ? Number((totalScoreSum / totalSubjectsCount).toFixed(2)) : 0;
 
   let cumulativeGrade = 'U';
   if (cumulativeAverage >= 90) cumulativeGrade = 'A*';

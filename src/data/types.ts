@@ -25,6 +25,7 @@ export type SaisSnapshot = {
   bannedTokens: BannedTokenLedger[];
   activeClassId: string | null;
   keySeq: Record<string, number>;
+  systemSettings?: any;
 };
 
 export type SnapshotCollection = keyof SaisSnapshot;

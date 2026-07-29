@@ -132,6 +132,26 @@ export interface MasterRowCalculated {
   leastMark: number;
   leastGrade: string;
   rank: number;
+  formattedRank?: string;
+}
+
+/**
+ * Formats a 1-based integer rank as a standard ordinal string (e.g. 1st, 2nd, 3rd, 4th, 11th, 21st).
+ */
+export function formatOrdinalRank(rank: number): string {
+  if (!rank || rank <= 0 || !Number.isFinite(rank)) return '-';
+  const j = rank % 10;
+  const k = rank % 100;
+  if (j === 1 && k !== 11) {
+    return `${rank}st`;
+  }
+  if (j === 2 && k !== 12) {
+    return `${rank}nd`;
+  }
+  if (j === 3 && k !== 13) {
+    return `${rank}rd`;
+  }
+  return `${rank}th`;
 }
 
 /**
@@ -200,10 +220,11 @@ export function calculateStreamOverviewAnalytics(
       leastMark: Number(leastMark.toFixed(1)),
       leastGrade,
       rank: 0,
+      formattedRank: '-',
     };
   });
 
-  // Ranks sorting (Descending average score)
+  // Ranks sorting (Descending average score with standard competition tie-breaking: 1st, 1st, 3rd)
   const sorted = [...rowDataList].sort((a, b) => b.averageScore - a.averageScore);
   let currentRank = 1;
   sorted.forEach((item, index) => {
@@ -211,6 +232,7 @@ export function calculateStreamOverviewAnalytics(
       currentRank = index + 1;
     }
     item.rank = currentRank;
+    item.formattedRank = formatOrdinalRank(currentRank);
   });
 
   const resultMap: Record<string, MasterRowCalculated> = {};
@@ -220,3 +242,4 @@ export function calculateStreamOverviewAnalytics(
 
   return resultMap;
 }
+

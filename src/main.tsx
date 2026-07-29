@@ -2,7 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { AuthProvider } from './context/AuthContext.tsx';
-import { DatabaseProvider } from './context/DatabaseContext.tsx';
+import { RootDatabaseProvider as DatabaseProvider } from './contexts/RootDatabaseProvider';
 import { UndoProvider } from './context/UndoContext.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';

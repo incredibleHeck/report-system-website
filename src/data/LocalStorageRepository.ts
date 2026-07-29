@@ -52,6 +52,7 @@ const COLLECTION_TO_KEY: Record<SnapshotCollection, string> = {
   bannedTokens: KEYS.bannedTokens,
   activeClassId: KEYS.activeClass,
   keySeq: KEYS.keySeq,
+  systemSettings: 'sais_systemSettings',
 };
 
 export class LocalStorageRepository implements DatabaseRepository {
