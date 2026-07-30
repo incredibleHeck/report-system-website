@@ -1,6 +1,6 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ChevronRight } from 'lucide-react';
+import { BookOpen, ChevronRight, Zap, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useActiveClass, useDatabase, normalizeYearId, getStreamYearId } from '../../context/DatabaseContext';
 import { getSubjectsForTerm } from '../../lib/programmeSchemas';
@@ -12,6 +12,7 @@ import type { TermCode } from '../../types';
 
 export default function TeacherDashboard() {
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
   const { currentUser } = useAuth();
   const {
     addStudent,
@@ -19,6 +20,8 @@ export default function TeacherDashboard() {
     transferStudent,
     users,
     updateClassSettings,
+    lifelongStudents,
+    enrollments,
   } = useDatabase();
   const {
     activeClass,
@@ -27,7 +30,6 @@ export default function TeacherDashboard() {
     classStudents,
     selectedAcademicYearId,
     setSelectedAcademicYearId,
-    availableStreams,
   } = useActiveClass();
   const isHeadteacherRole = currentUser?.role === 'headteacher';
 
@@ -70,6 +72,10 @@ export default function TeacherDashboard() {
   const [joinTerm, setJoinTerm] = useState<TermCode>('T1');
   const [error, setError] = useState('');
 
+  // Promote / Roster Import Modal State
+  const [promoteSourceClassId, setPromoteSourceClassId] = useState('');
+  const [selectedPromoteKeys, setSelectedPromoteKeys] = useState<string[]>([]);
+
   // Transfer modal state
   const [transferTarget, setTransferTarget] = useState<{ id: string; name: string } | null>(null);
   const [transferTerm, setTransferTerm] = useState<TermCode>('T1');
@@ -81,6 +87,47 @@ export default function TeacherDashboard() {
     }, 0);
     return String(maxIndex + 1).padStart(3, '0');
   };
+
+  // Derive unenrolled students for quick selection in Enroll Existing
+  const allUnenrolledStudents = useMemo(() => {
+    if (!activeClass || !lifelongStudents) return [];
+    const currentlyEnrolledKeys = new Set(classStudents.map((s) => s.studentKey || s.id));
+    return (lifelongStudents || [])
+      .filter((l) => !currentlyEnrolledKeys.has(l.studentKey) && !currentlyEnrolledKeys.has(l.id))
+      .map((l) => {
+        const prevEnr = (enrollments || []).find((e) => e.studentKey === l.studentKey && e.classId !== activeClass.id);
+        const prevClass = prevEnr ? classes.find((c) => c.id === prevEnr.classId)?.name : null;
+        return {
+          ...l,
+          prevClassLabel: prevClass ? ` (Prev: ${prevClass})` : '',
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeClass, lifelongStudents, classStudents, enrollments, classes]);
+
+  // Candidates for Fast-Promote Modal
+  const availableSourceClasses = useMemo(() => {
+    if (!activeClass) return [];
+    return classes.filter((c) => c.id !== activeClass.id);
+  }, [classes, activeClass]);
+
+  const promoteCandidates = useMemo(() => {
+    if (!promoteSourceClassId || !activeClass) return [];
+    const currentlyEnrolledKeys = new Set(classStudents.map((s) => s.studentKey || s.id));
+    const sourceEnrollments = (enrollments || []).filter((e) => e.classId === promoteSourceClassId);
+    const lifeByKey = new Map<string, any>((lifelongStudents || []).map((l: any) => [l.studentKey, l]));
+
+    return sourceEnrollments
+      .map((en) => {
+        const life = lifeByKey.get(en.studentKey) as { name?: string } | undefined;
+        return {
+          studentKey: en.studentKey,
+          name: life?.name || en.studentKey,
+          isEnrolledInTarget: currentlyEnrolledKeys.has(en.studentKey),
+        };
+      })
+      .filter((st) => !st.isEnrolledInTarget);
+  }, [promoteSourceClassId, enrollments, lifelongStudents, classStudents, activeClass]);
 
   const handleAddStudent = (e: FormEvent) => {
     e.preventDefault();
@@ -127,6 +174,33 @@ export default function TeacherDashboard() {
     }
   };
 
+  const handleExecutePromoteRoster = (e: FormEvent) => {
+    e.preventDefault();
+    if (!activeClass || selectedPromoteKeys.length === 0) return;
+    let count = 0;
+    try {
+      let currentIndexNum = parseInt(computeNextIndex(), 10);
+      for (const key of selectedPromoteKeys) {
+        const indexStr = String(currentIndexNum).padStart(3, '0');
+        enrollExistingStudent({
+          studentKey: key,
+          classId: activeClass.id,
+          rollNumber: `STU-${indexStr}`,
+          index: indexStr,
+          enrolledTerms: termsFromJoin('T1'),
+        });
+        currentIndexNum++;
+        count++;
+      }
+      setIsPromoteModalOpen(false);
+      setSelectedPromoteKeys([]);
+      setPromoteSourceClassId('');
+      alert(`Successfully enrolled ${count} existing student(s) into ${activeClass.name}!`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to promote roster');
+    }
+  };
+
   const openTransferModal = (studentLifeId: string, studentName: string) => {
     setTransferTarget({ id: studentLifeId, name: studentName });
     setTransferTerm('T1');
@@ -159,7 +233,8 @@ export default function TeacherDashboard() {
     : [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Workspace Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-sais-black font-display">Class Workspace</h1>
@@ -220,20 +295,32 @@ export default function TeacherDashboard() {
 
       {activeClass && (
         <>
-          <div className="@container">
-            <div className="grid @[380px]:grid-cols-2 @[600px]:grid-cols-3 gap-4">
-              <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-                <p className="text-xs text-sais-muted font-medium uppercase tracking-wider">Programme</p>
-                <p className="font-bold text-sais-black text-lg mt-1">{activeClass.programme}</p>
+          {/* Sleek, Compact Class Banner (Replaces Oversized Cards) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-2xs">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                <span className="text-slate-400 font-normal">Programme:</span>
+                <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] uppercase tracking-wider">{activeClass.programme}</span>
               </div>
-              <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-                <p className="text-xs text-sais-muted font-medium uppercase tracking-wider">Students</p>
-                <p className="font-bold text-sais-black text-lg mt-1">{classStudents.length}</p>
+              <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+              <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                <span className="text-slate-400 font-normal">Enrolled Students:</span>
+                <span className="font-bold text-red-900 bg-red-50 px-2.5 py-0.5 rounded border border-red-200 text-xs font-mono">{classStudents.length}</span>
               </div>
-              <div className="rounded-2xl bg-white border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-                <p className="text-xs text-sais-muted font-medium uppercase tracking-wider">Term</p>
-                <p className="font-bold text-sais-black text-base mt-1">{activeClass.settings.termYearInfo}</p>
+              <div className="h-4 w-px bg-slate-200 hidden sm:block" />
+              <div className="flex items-center gap-1.5 font-medium text-slate-700">
+                <span className="text-slate-400 font-normal">Active Term:</span>
+                <span className="font-semibold text-slate-900">{activeClass.settings.termYearInfo}</span>
               </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/teacher/mastersheet?classId=${activeClass.id}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 text-white px-3 py-1.5 text-xs font-bold hover:bg-red-900 transition-all shadow-2xs"
+              >
+                <span>📊 Open Master Sheet</span>
+              </Link>
             </div>
           </div>
 
@@ -272,8 +359,11 @@ export default function TeacherDashboard() {
 
           <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="font-bold text-sais-black text-lg font-display">Classlist</h2>
-              <div className="flex gap-2 text-xs">
+              <div>
+                <h2 className="font-bold text-sais-black text-lg font-display">Classlist ({classStudents.length})</h2>
+                <p className="text-xs text-slate-500">Manage student class enrollment for {selectedAcademicYearId}</p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
                 <button
                   type="button"
                   className={`px-3.5 py-1.5 rounded-xl font-medium transition-all duration-150 active:scale-[0.98] ${
@@ -295,6 +385,17 @@ export default function TeacherDashboard() {
                   onClick={() => setMode('existing')}
                 >
                   Enroll existing
+                </button>
+                <button
+                  type="button"
+                  className="px-3.5 py-1.5 rounded-xl font-semibold bg-emerald-800 text-white hover:bg-emerald-900 transition-all duration-150 active:scale-[0.98] shadow-xs flex items-center gap-1.5"
+                  onClick={() => {
+                    setIsPromoteModalOpen(true);
+                    setSelectedPromoteKeys([]);
+                  }}
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Fast-Promote Roster</span>
                 </button>
                 <button
                   type="button"
@@ -350,35 +451,81 @@ export default function TeacherDashboard() {
                 </div>
               </form>
             ) : (
-              <form onSubmit={handleEnrollExisting} className="@container mb-5">
-                <div className="grid @[400px]:grid-cols-2 @[640px]:grid-cols-4 gap-2.5">
-                  <input
-                    className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm font-mono text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs"
-                    placeholder="SAIS-YYYY-NNNN"
-                    value={existingKey}
-                    onChange={(e) => setExistingKey(e.target.value)}
-                  />
-                  <input
-                    className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs"
-                    placeholder="New roll number"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                  />
-                  <select
-                    className="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs"
-                    value={joinTerm}
-                    onChange={(e) => setJoinTerm(e.target.value as TermCode)}
-                  >
-                    <option value="T1">Join T1</option>
-                    <option value="T2">Join T2</option>
-                    <option value="T3">Join T3</option>
-                  </select>
-                  <button
-                    type="submit"
-                    className="rounded-xl bg-sais-red text-sais-white text-sm font-semibold px-4 py-2 hover:bg-sais-red-dark focus-visible:ring-2 focus-visible:ring-sais-red active:scale-[0.98] transition-all duration-150 shadow-xs"
-                  >
-                    Enroll
-                  </button>
+              <form onSubmit={handleEnrollExisting} className="@container mb-5 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4 text-red-800" />
+                    Enroll Existing Student into {activeClass.name} ({selectedAcademicYearId})
+                  </h3>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {allUnenrolledStudents.length} available student(s) in system
+                  </span>
+                </div>
+                
+                <div className="grid @[400px]:grid-cols-1 @[640px]:grid-cols-3 gap-3">
+                  <div className="@[640px]:col-span-2 space-y-1.5">
+                    <label className="block text-xs font-medium text-slate-600">Select Existing Student from Registry:</label>
+                    <select
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs cursor-pointer"
+                      value={existingKey}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setExistingKey(val);
+                        if (!studentId && val) {
+                          setStudentId(`STU-${computeNextIndex()}`);
+                        }
+                      }}
+                    >
+                      <option value="">-- Choose Existing Student from Registry --</option>
+                      {allUnenrolledStudents.map((st) => (
+                        <option key={st.studentKey} value={st.studentKey}>
+                          {st.name} ({st.studentKey}){st.prevClassLabel}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] text-slate-400 font-medium">Or type lifelong key manually:</span>
+                      <input
+                        className="flex-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-mono text-slate-800 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sais-red"
+                        placeholder="e.g. SAIS-2023-0042"
+                        value={existingKey}
+                        onChange={(e) => setExistingKey(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">New Roll Number:</label>
+                      <input
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-mono text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red transition-all shadow-xs"
+                        placeholder="New roll number"
+                        value={studentId}
+                        onChange={(e) => setStudentId(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red transition-all shadow-xs"
+                        value={joinTerm}
+                        onChange={(e) => setJoinTerm(e.target.value as TermCode)}
+                      >
+                        <option value="T1">Join T1</option>
+                        <option value="T2">Join T2</option>
+                        <option value="T3">Join T3</option>
+                      </select>
+
+                      <button
+                        type="submit"
+                        disabled={!existingKey || !studentId}
+                        className="rounded-xl bg-sais-red text-sais-white text-xs font-bold px-4 py-2 hover:bg-sais-red-dark disabled:opacity-40 transition-all shadow-xs"
+                      >
+                        Enroll Student
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </form>
             )}
@@ -426,6 +573,114 @@ export default function TeacherDashboard() {
           </section>
         </>
       )}
+
+      {/* Fast-Promote Class Roster from Previous Year Modal */}
+      <Modal
+        isOpen={isPromoteModalOpen}
+        onClose={() => setIsPromoteModalOpen(false)}
+        title={`Fast-Promote Class Roster into ${activeClass?.name || 'Class'}`}
+        subtitle={`Select a source class from a previous academic year to bulk enroll students for ${selectedAcademicYearId}`}
+      >
+        <form onSubmit={handleExecutePromoteRoster} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Select Source Class Stream (Previous Academic Year):
+            </label>
+            <select
+              className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs cursor-pointer"
+              value={promoteSourceClassId}
+              onChange={(e) => {
+                setPromoteSourceClassId(e.target.value);
+                setSelectedPromoteKeys([]);
+              }}
+            >
+              <option value="">-- Choose Class Stream to Import From --</option>
+              {availableSourceClasses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({getStreamYearId(c).replace('-', '/')})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {promoteSourceClassId && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-bold text-slate-800">
+                  Select Students ({promoteCandidates.length} available to enroll):
+                </span>
+                <button
+                  type="button"
+                  className="text-xs font-bold text-red-800 hover:underline"
+                  onClick={() => {
+                    if (selectedPromoteKeys.length === promoteCandidates.length) {
+                      setSelectedPromoteKeys([]);
+                    } else {
+                      setSelectedPromoteKeys(promoteCandidates.map((c) => c.studentKey));
+                    }
+                  }}
+                >
+                  {selectedPromoteKeys.length === promoteCandidates.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+
+              {promoteCandidates.length === 0 ? (
+                <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+                  All students from this source class are already enrolled in {activeClass?.name}!
+                </p>
+              ) : (
+                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+                  {promoteCandidates.map((cand) => {
+                    const isChecked = selectedPromoteKeys.includes(cand.studentKey);
+                    return (
+                      <label
+                        key={cand.studentKey}
+                        className="flex items-center justify-between p-2.5 hover:bg-red-50/50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            className="rounded border-slate-300 text-red-800 focus:ring-red-600 w-4 h-4 cursor-pointer"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPromoteKeys((prev) => [...prev, cand.studentKey]);
+                              } else {
+                                setSelectedPromoteKeys((prev) => prev.filter((k) => k !== cand.studentKey));
+                              }
+                            }}
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">{cand.name}</p>
+                            <p className="text-[11px] font-mono text-slate-500">{cand.studentKey}</p>
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsPromoteModalOpen(false)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={selectedPromoteKeys.length === 0}
+              className="rounded-lg bg-emerald-800 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-900 disabled:opacity-40 transition-all shadow-xs"
+            >
+              Enroll {selectedPromoteKeys.length} Selected Student(s)
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Transfer / Leave Student Modal */}
       <Modal
