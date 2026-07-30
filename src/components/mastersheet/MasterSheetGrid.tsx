@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { isAcademicSubject } from '../../lib/programmeSchemas';
 import { toCanonicalTermKey } from '../../lib/academicYear';
 import { MasterSheetSubjectCell } from './MasterSheetCell';
+import { useDatabase } from '../../context/DatabaseContext';
 
 interface MasterSheetGridProps {
   classStudents: any[];
@@ -50,7 +51,68 @@ export function MasterSheetGrid({
   mode,
 }: MasterSheetGridProps) {
   const navigate = useNavigate();
+  const { saveSummaries, summaries } = useDatabase();
   const isAnnual = selectedTermView === 'ANNUAL';
+
+  const handleCommitRemark = (
+    stId: string,
+    overrideVal?: { field: 'general' | 'pe' | 'club'; val: string }
+  ) => {
+    if (isReadOnlyMode || !isFormTeacher || !activeClass) return;
+    const existingSum = summaries.find(
+      (s) =>
+        s.studentId === stId &&
+        (s.classId === activeClass.id || activeClass.id === '2025-2026-YEAR-5A') &&
+        s.termKey === activeTermKey &&
+        s.mode === mode
+    );
+
+    const analytics = analyticsMap[stId] || {
+      rawScore: 0,
+      averageScore: 0,
+      aveGrade: 'U',
+      bestMark: 0,
+      bestGrade: 'U',
+      leastMark: 0,
+      leastGrade: 'U',
+      rank: 0,
+    };
+
+    const genVal = overrideVal?.field === 'general' ? overrideVal.val : (generalComments[stId] || '');
+    const peVal = overrideVal?.field === 'pe' ? overrideVal.val : (peComments[stId] || '');
+    const clubVal = overrideVal?.field === 'club' ? overrideVal.val : (clubComments[stId] || '');
+
+    const ok = saveSummaries([
+      {
+        studentId: stId,
+        studentKey: classStudents.find((s) => s.id === stId)?.studentKey || stId,
+        classId: activeClass.id,
+        mode,
+        termKey: activeTermKey,
+        academicYear: year,
+        rawScore: analytics.rawScore,
+        averageScore: analytics.averageScore,
+        aveGrade: analytics.aveGrade,
+        bestMark: analytics.bestMark,
+        bestGrade: analytics.bestGrade,
+        leastMark: analytics.leastMark,
+        leastGrade: analytics.leastGrade,
+        rank: analytics.rank,
+        generalComment: genVal,
+        peComment: peVal,
+        clubComment: clubVal,
+        teacherName: activeClass.settings?.teacherName || '',
+        className: activeClass.name || '',
+        programme: activeClass.programme || 'PRIMARY',
+        finalized: existingSum?.finalized || false,
+        subjectLines: existingSum?.subjectLines || [],
+      },
+    ]);
+
+    if (ok === false) {
+      alert('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+    }
+  };
 
   // Compute column offset start indices for each subject in the row
   const colOffsets: number[] = [];
@@ -68,6 +130,18 @@ export function MasterSheetGrid({
   const totalSubjectCols = currentColCount;
   const totalCols = totalSubjectCols + 3; // General, PE, Club comments
   const totalRows = classStudents.length;
+
+  const scoresMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    for (const s of currentClassScores) {
+      if (!s || !s.subjectCode) continue;
+      const subCode = s.subjectCode;
+      if (s.studentId) map.set(`${s.studentId}_${subCode}`, s);
+      if ((s as any).studentKey) map.set(`${(s as any).studentKey}_${subCode}`, s);
+      if ((s as any).legacyStudentId) map.set(`${(s as any).legacyStudentId}_${subCode}`, s);
+    }
+    return map;
+  }, [currentClassScores]);
 
   const handleGridKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
@@ -100,9 +174,17 @@ export function MasterSheetGrid({
 
       case 'Tab':
         if (e.shiftKey) {
-          targetCol = Math.max(0, c - 1);
+          targetCol = c - 1;
+          if (targetCol < 0) {
+            targetRow = Math.max(0, r - 1);
+            targetCol = totalCols - 1;
+          }
         } else {
-          targetCol = Math.min(totalCols - 1, c + 1);
+          targetCol = c + 1;
+          if (targetCol >= totalCols) {
+            targetRow = Math.min(totalRows - 1, r + 1);
+            targetCol = 0;
+          }
         }
         e.preventDefault();
         break;
@@ -132,6 +214,7 @@ export function MasterSheetGrid({
     }
 
     if (targetRow !== r || targetCol !== c) {
+      if (isAnnual) return;
       const nextInput = document.querySelector<HTMLInputElement>(
         `input[data-row="${targetRow}"][data-col="${targetCol}"]`
       );
@@ -143,16 +226,20 @@ export function MasterSheetGrid({
   };
 
   return (
-    <div className={`overflow-x-auto rounded-lg shadow-xs border border-slate-200 bg-white max-h-[75vh] scrollbar-thin scrollbar-thumb-slate-300 ${isAnnual ? 'w-full max-w-5xl' : 'min-w-[2600px]'}`}>
-      <table className={`${isAnnual ? 'w-full' : 'min-w-[2600px]'} text-xs border-collapse`}>
+    <div className={`overflow-x-auto rounded-lg shadow-xs border border-slate-200 bg-white max-h-[75vh] scrollbar-thin scrollbar-thumb-slate-300 ${isAnnual ? 'w-full max-w-5xl' : 'min-w-[1200px]'}`}>
+      <table className="w-full border-collapse text-left text-xs text-slate-800 font-sans min-w-[1200px]">
         <thead>
-          <tr className="bg-red-900 text-white font-bold font-display uppercase tracking-wider text-center text-xs select-none sticky top-0 z-30 shadow-2xs">
-            <th
-              colSpan={3}
-              className="py-2.5 px-3 border-r border-red-950/40 text-center sticky left-0 z-30 bg-red-950"
-            >
-              STUDENT IDENTIFIERS ({classStudents.length} Students)
+          <tr className="bg-red-900 text-white font-bold uppercase tracking-wider text-[11px] select-none sticky top-0 z-30 shadow-xs">
+            <th className="sticky left-0 z-30 bg-red-900 text-white text-left px-2 py-2 border-r border-b border-red-950/40 w-12 sm:w-14">
+              Index No.
             </th>
+            <th className="sticky left-12 sm:left-14 z-30 bg-red-900 text-white text-left px-2 py-2 border-r border-b border-red-950/40 w-24 sm:w-32">
+              Student ID
+            </th>
+            <th className="sticky left-[144px] sm:left-[184px] z-30 bg-red-900 text-white text-left px-3 py-2 border-b border-red-950/40 w-36 sm:w-52 min-w-[144px] sm:min-w-[208px] border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.12)]">
+              Student Name
+            </th>
+
             {isAnnual ? (
               <th colSpan={3} className="py-2.5 px-3 border-r border-red-950/40 text-center bg-amber-900">
                 TERM RAW SCORES FROM MASTER SHEETS (3 TERMS)
@@ -179,13 +266,13 @@ export function MasterSheetGrid({
           </tr>
 
           <tr className="bg-slate-100 font-semibold border-b border-r border-slate-300 text-slate-700 text-xs select-none sticky top-9 z-30">
-            <th className="sticky left-0 z-30 bg-slate-100 text-left px-2 py-2 border-r border-b border-slate-300 w-14">
+            <th className="sticky left-0 z-30 bg-slate-100 text-left px-2 py-2 border-r border-b border-slate-300 w-12 sm:w-14 text-[11px] sm:text-xs">
               Index No.
             </th>
-            <th className="sticky left-14 z-30 bg-slate-100 text-left px-2 py-2 border-r border-b border-slate-300 w-32">
+            <th className="sticky left-12 sm:left-14 z-30 bg-slate-100 text-left px-2 py-2 border-r border-b border-slate-300 w-24 sm:w-32 text-[11px] sm:text-xs">
               Student ID
             </th>
-            <th className="sticky left-[184px] z-30 bg-slate-100 text-left px-3 py-2 border-b border-slate-300 w-52 min-w-[208px] border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+            <th className="sticky left-[144px] sm:left-[184px] z-30 bg-slate-100 text-left px-3 py-2 border-b border-slate-300 w-36 sm:w-52 min-w-[144px] sm:min-w-[208px] border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] text-[11px] sm:text-xs">
               Student Name
             </th>
 
@@ -312,13 +399,6 @@ export function MasterSheetGrid({
               formattedRank: '-',
             };
 
-            const clubScore = currentClassScores.find(
-              (x) =>
-                (x.studentId === st.id || x.studentKey === st.studentKey || x.studentId === st.studentKey) &&
-                (x.subjectCode === 'CLUB' || x.subjectCode === 'CLUBS')
-            );
-            const assignedClub = st.clubName || clubScore?.clubName || 'Unassigned';
-
             const generalCommentReadOnly = isReadOnlyMode || !isFormTeacher;
 
             return (
@@ -326,17 +406,17 @@ export function MasterSheetGrid({
                 key={st.id}
                 className="group/row border-t border-slate-200 hover:bg-red-50/30 transition-colors duration-150"
               >
-                <td className="px-2 py-2 font-mono font-semibold text-slate-700 whitespace-nowrap align-middle sticky left-0 z-20 bg-white group-focus-within/row:bg-red-50/60 border-r border-b border-slate-300 w-14 transition-colors">
+                <td className="px-1.5 sm:px-2 py-2 font-mono font-semibold text-slate-700 whitespace-nowrap align-middle sticky left-0 z-20 bg-white group-focus-within/row:bg-red-50/60 border-r border-b border-slate-300 w-12 sm:w-14 text-[10px] sm:text-xs transition-colors">
                   {st.index || String(idx + 1).padStart(3, '0')}
                 </td>
 
-                <td className="px-2 py-2 font-mono font-semibold text-slate-600 whitespace-nowrap align-middle sticky left-14 z-20 bg-white group-focus-within/row:bg-red-50/60 border-r border-b border-slate-300 w-32 transition-colors">
+                <td className="px-1.5 sm:px-2 py-2 font-mono font-semibold text-slate-600 whitespace-nowrap align-middle sticky left-12 sm:left-14 z-20 bg-white group-focus-within/row:bg-red-50/60 border-r border-b border-slate-300 w-24 sm:w-32 text-[10px] sm:text-xs truncate transition-colors">
                   {st.studentKey || st.studentId || st.id}
                 </td>
 
                 <td
                   onClick={() => navigate(`/transcripts?studentKey=${st.studentKey || st.id}`)}
-                  className="px-3 py-2 font-semibold text-slate-900 whitespace-nowrap align-middle sticky left-[184px] z-20 bg-white group-focus-within/row:bg-red-50/60 border-b border-slate-300 w-52 transition-colors cursor-pointer hover:underline hover:text-red-700 border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]"
+                  className="px-2 sm:px-3 py-2 font-semibold text-slate-900 whitespace-nowrap align-middle sticky left-[144px] sm:left-[184px] z-20 bg-white group-focus-within/row:bg-red-50/60 border-b border-slate-300 w-36 sm:w-52 text-[11px] sm:text-xs transition-colors cursor-pointer hover:underline hover:text-red-700 border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] truncate"
                   title="Click to view full student transcript"
                 >
                   {st.name}
@@ -356,16 +436,7 @@ export function MasterSheetGrid({
                   </>
                 ) : (
                   allSubjects.map((sub, subIdx) => {
-                    const hit = currentClassScores.find(
-                      (x) =>
-                        (x.studentKey === st.studentKey ||
-                          x.studentKey === st.id ||
-                          x.studentId === st.id ||
-                          x.studentId === st.studentKey ||
-                          (x as any).legacyStudentId === st.studentId ||
-                          (x as any).legacyStudentId === st.id) &&
-                        x.subjectCode === sub.code
-                    );
+                    const hit = scoresMap.get(`${st.id}_${sub.code}`) || (st.studentKey ? scoresMap.get(`${st.studentKey}_${sub.code}`) : undefined);
                     const ave = subjectAverages[sub.code] || 0;
 
                     return (
@@ -429,7 +500,13 @@ export function MasterSheetGrid({
                         data-row={idx}
                         data-col={totalSubjectCols}
                         readOnly={generalCommentReadOnly}
-                        onKeyDown={(e) => handleGridKeyDown(e, idx, totalSubjectCols)}
+                        onBlur={(e) => handleCommitRemark(st.id, { field: 'general', val: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === 'Tab') {
+                            handleCommitRemark(st.id, { field: 'general', val: e.currentTarget.value });
+                          }
+                          handleGridKeyDown(e, idx, totalSubjectCols);
+                        }}
                         onFocus={(e) => e.target.select()}
                         className={`w-full rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all ${
                           generalCommentReadOnly
@@ -456,7 +533,13 @@ export function MasterSheetGrid({
                         data-row={idx}
                         data-col={totalSubjectCols + 1}
                         readOnly={generalCommentReadOnly}
-                        onKeyDown={(e) => handleGridKeyDown(e, idx, totalSubjectCols + 1)}
+                        onBlur={(e) => handleCommitRemark(st.id, { field: 'pe', val: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === 'Tab') {
+                            handleCommitRemark(st.id, { field: 'pe', val: e.currentTarget.value });
+                          }
+                          handleGridKeyDown(e, idx, totalSubjectCols + 1);
+                        }}
                         onFocus={(e) => e.target.select()}
                         className={`w-full rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all ${
                           generalCommentReadOnly
@@ -483,7 +566,13 @@ export function MasterSheetGrid({
                         data-row={idx}
                         data-col={totalSubjectCols + 2}
                         readOnly={generalCommentReadOnly}
-                        onKeyDown={(e) => handleGridKeyDown(e, idx, totalSubjectCols + 2)}
+                        onBlur={(e) => handleCommitRemark(st.id, { field: 'club', val: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === 'Tab') {
+                            handleCommitRemark(st.id, { field: 'club', val: e.currentTarget.value });
+                          }
+                          handleGridKeyDown(e, idx, totalSubjectCols + 2);
+                        }}
                         onFocus={(e) => e.target.select()}
                         className={`w-full rounded border border-slate-300 px-2.5 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600 transition-all ${
                           generalCommentReadOnly

@@ -293,14 +293,16 @@ export function useMasterSheetData() {
         t3Raw = t3Scores.reduce((acc, s) => acc + (s.totalScore || 0), 0);
       }
 
-      const totalRaw = Number(((t1Raw ?? 0) + (t2Raw ?? 0) + (t3Raw ?? 0)).toFixed(1));
+      const totalRaw = Number(((t1Raw ?? 0) + (t2Raw ?? 0) + (t3Raw ?? 0)).toFixed(2));
       let termsCount = 0;
       if (t1Raw > 0) termsCount++;
       if (t2Raw > 0) termsCount++;
       if (t3Raw > 0) termsCount++;
-      if (termsCount === 0) termsCount = 1;
 
-      const annualAverage = Number((totalRaw / (termsCount * (academicSubjects.length || 7))).toFixed(1));
+      const annualAverage = termsCount > 0
+        ? Number((totalRaw / (termsCount * (academicSubjects.length || 1))).toFixed(2))
+        : 0;
+
       let aveGrade = 'U';
       if (annualAverage >= 80) aveGrade = 'A*';
       else if (annualAverage >= 70) aveGrade = 'A';
@@ -309,9 +311,9 @@ export function useMasterSheetData() {
       else if (annualAverage >= 40) aveGrade = 'D';
 
       map[st.id] = {
-        t1Raw: Number(t1Raw.toFixed(1)),
-        t2Raw: Number(t2Raw.toFixed(1)),
-        t3Raw: Number(t3Raw.toFixed(1)),
+        t1Raw: Number(t1Raw.toFixed(2)),
+        t2Raw: Number(t2Raw.toFixed(2)),
+        t3Raw: Number(t3Raw.toFixed(2)),
         rawScore: totalRaw,
         averageScore: annualAverage,
         aveGrade,
@@ -321,20 +323,47 @@ export function useMasterSheetData() {
         leastGrade: 'U',
         rank: 0,
         formattedRank: '-',
+        termsCount,
       };
     }
 
-    // Sort students by raw score for annual rank calculation with standard ordinal tie handling (e.g. 1st, 1st, 3rd)
-    const sorted = [...classStudents].sort((a, b) => (map[b.id]?.rawScore || 0) - (map[a.id]?.rawScore || 0));
+    // Sort students by averageScore descending, then rawScore descending
+    const sorted = [...classStudents].sort((a, b) => {
+      const stA = map[a.id] || {};
+      const stB = map[b.id] || {};
+      if ((stB.averageScore || 0) !== (stA.averageScore || 0)) {
+        return (stB.averageScore || 0) - (stA.averageScore || 0);
+      }
+      return (stB.rawScore || 0) - (stA.rawScore || 0);
+    });
+
     let currentRank = 1;
     sorted.forEach((st, idx) => {
-      if (idx > 0 && (map[st.id]?.rawScore || 0) < (map[sorted[idx - 1].id]?.rawScore || 0)) {
-        currentRank = idx + 1;
+      const current = map[st.id];
+      if (!current || current.termsCount === 0 || current.rawScore === 0) {
+        if (current) {
+          current.rank = 0;
+          current.formattedRank = '-';
+        }
+        return;
       }
-      if (map[st.id]) {
-        map[st.id].rank = currentRank;
-        map[st.id].formattedRank = formatOrdinalRank(currentRank);
+
+      if (idx > 0) {
+        const prevStudent = sorted[idx - 1];
+        const prev = map[prevStudent.id];
+        if (
+          prev &&
+          prev.termsCount > 0 &&
+          prev.rawScore > 0 &&
+          ((current.averageScore || 0) < (prev.averageScore || 0) ||
+            ((current.averageScore || 0) === (prev.averageScore || 0) &&
+              (current.rawScore || 0) < (prev.rawScore || 0)))
+        ) {
+          currentRank = idx + 1;
+        }
       }
+      current.rank = currentRank;
+      current.formattedRank = formatOrdinalRank(currentRank);
     });
 
     return map;

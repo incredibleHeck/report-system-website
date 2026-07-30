@@ -12,14 +12,55 @@ export interface MarkGradingState {
   subjectContexts: SubjectContext[];
   setSubjectContexts: React.Dispatch<React.SetStateAction<SubjectContext[]>>;
   classes: ClassStream[];
+  systemSettings?: any;
+  currentUser?: any;
 }
 
-export function useMarkGradingLogic(state: MarkGradingState) {
-  const { scores, setScores, summaries, setSummaries, subjectContexts, setSubjectContexts, classes } = state;
+const getCurrentUser = (stateUser?: any) => {
+  if (stateUser) return stateUser;
+  try {
+    const raw = localStorage.getItem('sais_auth_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
 
-  const upsertScore = (score: Omit<AssessmentScore, 'id'>) => {
+const isTermLocked = (academicYear?: string, termKey?: string, systemSettings?: any) => {
+  if (!systemSettings?.lockedTerms) return false;
+  if (!academicYear && !termKey) return false;
+
+  const rawYear = (academicYear || '').replace('/', '-').trim();
+  const rawTerm = (termKey || '').trim();
+
+  let termCode = 'T1';
+  if (rawTerm.includes('T3') || rawTerm.includes('Term 3') || rawTerm.endsWith('3')) termCode = 'T3';
+  else if (rawTerm.includes('T2') || rawTerm.includes('Term 2') || rawTerm.endsWith('2')) termCode = 'T2';
+
+  const yearNorm = rawYear ? rawYear.split('-T')[0].split('_T')[0] : '2026-2027';
+  const yearAlt = yearNorm.replace('-', '/');
+
+  const key1 = `${yearNorm}_${termCode}`;
+  const key2 = `${yearAlt}_${termCode}`;
+
+  return Boolean(systemSettings.lockedTerms[key1] || systemSettings.lockedTerms[key2]);
+};
+
+export function useMarkGradingLogic(state: MarkGradingState) {
+  const { scores, setScores, summaries, setSummaries, subjectContexts, setSubjectContexts, classes, systemSettings, currentUser } = state;
+
+  const upsertScore = (score: Omit<AssessmentScore, 'id'>): boolean => {
     const normalized = normalizeTermFields(score);
     if (!normalized.academicYear) throw new Error('academicYear is required on scores');
+
+    const user = getCurrentUser(currentUser);
+    const isLocked = isTermLocked(normalized.academicYear, normalized.termKey, systemSettings);
+
+    if (isLocked && user?.role !== 'headteacher') {
+      console.warn('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+      return false;
+    }
+
     setScores((prev) => {
       const key = scoreKey(normalized);
       const idx = prev.findIndex((p) => scoreKey(p) === key);
@@ -30,12 +71,29 @@ export function useMarkGradingLogic(state: MarkGradingState) {
       }
       return [...prev, { ...normalized, id: createId() }];
     });
+    return true;
   };
 
-  const upsertScores = (list: Omit<AssessmentScore, 'id'>[]) => {
+  const upsertScores = (list: Omit<AssessmentScore, 'id'>[]): boolean => {
+    const user = getCurrentUser(currentUser);
+
+    let hasSecurityBlock = false;
+    const allowedList = list.filter((score) => {
+      const normalized = normalizeTermFields(score);
+      const isLocked = isTermLocked(normalized.academicYear, normalized.termKey, systemSettings);
+      if (isLocked && user?.role !== 'headteacher') {
+        console.warn('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+        hasSecurityBlock = true;
+        return false;
+      }
+      return true;
+    });
+
+    if (allowedList.length === 0) return false;
+
     setScores((prev) => {
       const map = new Map<string, AssessmentScore>(prev.map((p) => [scoreKey(p), p]));
-      for (const score of list) {
+      for (const score of allowedList) {
         const normalized = normalizeTermFields(score);
         if (!normalized.academicYear) throw new Error('academicYear is required on scores');
         const key = scoreKey(normalized);
@@ -48,12 +106,29 @@ export function useMarkGradingLogic(state: MarkGradingState) {
       }
       return Array.from(map.values());
     });
+    return !hasSecurityBlock;
   };
 
-  const saveSummaries = (reports: Omit<ReportSummary, 'id'>[]) => {
+  const saveSummaries = (reports: Omit<ReportSummary, 'id'>[]): boolean => {
+    const user = getCurrentUser(currentUser);
+
+    let hasSecurityBlock = false;
+    const allowedReports = reports.filter((report) => {
+      const normalized = normalizeTermFields(report);
+      const isLocked = isTermLocked(normalized.academicYear, normalized.termKey, systemSettings);
+      if (isLocked && user?.role !== 'headteacher') {
+        console.warn('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+        hasSecurityBlock = true;
+        return false;
+      }
+      return true;
+    });
+
+    if (allowedReports.length === 0) return false;
+
     setSummaries((prev) => {
       const map = new Map<string, ReportSummary>(prev.map((p) => [summaryKey(p), p]));
-      for (const report of reports) {
+      for (const report of allowedReports) {
         const normalized = normalizeTermFields(report);
         const key = summaryKey(normalized);
         const existing = map.get(key);
@@ -65,11 +140,24 @@ export function useMarkGradingLogic(state: MarkGradingState) {
       }
       return Array.from(map.values());
     });
+    return !hasSecurityBlock;
   };
 
   const finalizeReports = (reportsOrClassId: Omit<ReportSummary, 'id'>[] | string) => {
+    const user = getCurrentUser(currentUser);
+
     if (typeof reportsOrClassId === 'string') {
       const classId = reportsOrClassId;
+      const targetClass = classes.find((c) => c.id === classId);
+      const termInfo = targetClass?.settings?.termYearInfo || '2026/2027 — Term 1';
+      const [yearPart, termPart] = termInfo.split(' — ');
+      const isLocked = isTermLocked(yearPart, termPart, systemSettings);
+
+      if (isLocked && user?.role !== 'headteacher') {
+        console.warn('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+        return;
+      }
+
       setSummaries((prev) => {
         const hasMatch = prev.some((s) => s.classId === classId);
         if (hasMatch) {
@@ -79,8 +167,8 @@ export function useMarkGradingLogic(state: MarkGradingState) {
             id: createId(),
             classId,
             studentId: 'CLASS_SUMMARY',
-            academicYear: '2026/2027',
-            termKey: 'T1',
+            academicYear: yearPart || '2026/2027',
+            termKey: termPart || 'T1',
             mode: 'EOT',
             finalized: true,
             isFinalized: true,
@@ -116,6 +204,17 @@ export function useMarkGradingLogic(state: MarkGradingState) {
   };
 
   const unfinalizeReports = (classId: string) => {
+    const user = getCurrentUser(currentUser);
+    const targetClass = classes.find((c) => c.id === classId);
+    const termInfo = targetClass?.settings?.termYearInfo || '2026/2027 — Term 1';
+    const [yearPart, termPart] = termInfo.split(' — ');
+    const isLocked = isTermLocked(yearPart, termPart, systemSettings);
+
+    if (isLocked && user?.role !== 'headteacher') {
+      console.warn('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+      return;
+    }
+
     setSummaries((prev) =>
       prev.map((s) => (s.classId === classId ? { ...s, finalized: false, isFinalized: false } : s))
     );
@@ -127,6 +226,14 @@ export function useMarkGradingLogic(state: MarkGradingState) {
     termKey: string,
     mode: ReportMode = 'EOT'
   ) => {
+    const user = getCurrentUser(currentUser);
+    const isLocked = isTermLocked(academicYear, termKey, systemSettings);
+
+    if (isLocked && user?.role !== 'headteacher') {
+      console.warn('Security Block: Attempted to modify records in a locked term without Headteacher privileges.');
+      return;
+    }
+
     setSummaries((prev) =>
       prev.map((s) => {
         if (

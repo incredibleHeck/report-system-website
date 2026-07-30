@@ -10,6 +10,7 @@ import { toCanonicalTermKey, parseAcademicYear } from '../../lib/academicYear';
 import EotReportCard from '../../components/reports/EotReportCard';
 import MidtermReportCard from '../../components/reports/MidtermReportCard';
 import type { ReportMode, ReportSummary } from '../../types';
+import JSZip from 'jszip';
 
 export default function ReportsPage() {
   const location = useLocation();
@@ -173,7 +174,11 @@ export default function ReportsPage() {
     return { missingComments, missingScores, missingAttendance };
   }, [activeClass, classStudents, reportRows, classScores, mode]);
 
-  const currentStudent = classStudents[activeStudentIndex];
+  const safeStudentIndex =
+    activeStudentIndex >= 0 && activeStudentIndex < classStudents.length
+      ? activeStudentIndex
+      : 0;
+  const currentStudent = classStudents[safeStudentIndex] || null;
   const currentSummary = currentStudent ? reportRows.find((r) => r.studentId === currentStudent.id) : null;
   const currentStudentScores = currentStudent ? classScores.filter((s) => s.studentId === currentStudent.id) : [];
 
@@ -280,12 +285,16 @@ export default function ReportsPage() {
     setAuditModalOpen(false);
     setBusy(true);
     const targets = classStudents.slice(0, limit ?? classStudents.length);
+    const zip = new JSZip();
+    let generatedCount = 0;
+
     for (let i = 0; i < targets.length; i++) {
       const st = targets[i];
       setProgress(`Generating PDF ${i + 1} of ${targets.length}: ${st.name}`);
       try {
         const { pdf, student } = await renderOffscreen(st.id);
-        downloadBlob(pdf.blob, pdf.fileName);
+        zip.file(pdf.fileName, pdf.blob);
+        generatedCount++;
         updateContactStatus(student.id, activeClass.id, {
           ...(mode === 'EOT'
             ? { pdfId: pdf.fileName, whatsappStatus: 'PDF_READY', emailStatus: 'PDF_READY' }
@@ -301,9 +310,17 @@ export default function ReportsPage() {
           emailStatus: `ERROR: ${e instanceof Error ? e.message : 'PDF fail'}`,
         });
       }
-      await yieldToBrowser(100);
+      await yieldToBrowser(50);
     }
-    saveSummaries(reportRows.map(({ id: _id, ...rest }) => ({ ...rest, finalized: true })));
+
+    if (generatedCount > 0) {
+      setProgress('Bundling PDFs into ZIP archive...');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const cleanClassName = (activeClass?.name || 'Class').replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
+      const zipFileName = `${cleanClassName}_${selectedTermView}_${mode}_Reports.zip`;
+      downloadBlob(zipBlob, zipFileName);
+    }
+
     setProgress('');
     setBusy(false);
   };

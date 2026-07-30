@@ -173,7 +173,10 @@ export function calculateStreamOverviewAnalytics(
           s.studentId === st.studentKey ||
           (s as any).legacyStudentId === st.studentId ||
           (s as any).legacyStudentId === st.id) &&
-        acadCodes.includes(s.subjectCode)
+        acadCodes.includes(s.subjectCode) &&
+        s.totalScore !== undefined &&
+        s.totalScore !== null &&
+        !isNaN(s.totalScore)
     );
 
     let rawScore = 0;
@@ -206,37 +209,58 @@ export function calculateStreamOverviewAnalytics(
       leastGrade = 'U';
     }
 
-    const subjectCount = acadCodes.length || 1;
-    const averageScore = Number((rawScore / subjectCount).toFixed(2));
+    const recordedCount = studentScores.length;
+    const averageScore = recordedCount > 0 ? Number((rawScore / recordedCount).toFixed(2)) : 0;
     const aveGrade = gradeFromTotal(averageScore).grade;
 
     return {
       studentId: st.id,
-      rawScore: Number(rawScore.toFixed(1)),
+      rawScore: Number(rawScore.toFixed(2)),
       averageScore,
       aveGrade,
-      bestMark: Number(bestMark.toFixed(1)),
+      bestMark: Number(bestMark.toFixed(2)),
       bestGrade,
-      leastMark: Number(leastMark.toFixed(1)),
+      leastMark: Number(leastMark.toFixed(2)),
       leastGrade,
       rank: 0,
       formattedRank: '-',
+      recordedCount,
     };
   });
 
-  // Ranks sorting (Descending average score with standard competition tie-breaking: 1st, 1st, 3rd)
-  const sorted = [...rowDataList].sort((a, b) => b.averageScore - a.averageScore);
+  // Ranks sorting: Primary averageScore descending, Secondary rawScore descending
+  const sorted = [...rowDataList].sort((a, b) => {
+    if (b.averageScore !== a.averageScore) {
+      return b.averageScore - a.averageScore;
+    }
+    return b.rawScore - a.rawScore;
+  });
+
   let currentRank = 1;
   sorted.forEach((item, index) => {
-    if (index > 0 && item.averageScore < sorted[index - 1].averageScore) {
-      currentRank = index + 1;
+    if (item.recordedCount === 0 || item.rawScore === 0) {
+      item.rank = 0;
+      item.formattedRank = '-';
+      return;
+    }
+
+    if (index > 0) {
+      const prev = sorted[index - 1];
+      if (
+        prev.recordedCount > 0 &&
+        prev.rawScore > 0 &&
+        (item.averageScore < prev.averageScore ||
+          (item.averageScore === prev.averageScore && item.rawScore < prev.rawScore))
+      ) {
+        currentRank = index + 1;
+      }
     }
     item.rank = currentRank;
     item.formattedRank = formatOrdinalRank(currentRank);
   });
 
   const resultMap: Record<string, MasterRowCalculated> = {};
-  rowDataList.forEach((item) => {
+  rowDataList.forEach(({ recordedCount, ...item }) => {
     resultMap[item.studentId] = item;
   });
 

@@ -165,7 +165,7 @@ export function RootDatabaseProvider({ children }: { children: ReactNode }) {
   });
 
   const markGradingLogic = useMarkGradingLogic({
-    scores, setScores, summaries, setSummaries, subjectContexts, setSubjectContexts, classes
+    scores, setScores, summaries, setSummaries, subjectContexts, setSubjectContexts, classes, systemSettings
   });
 
   const seedDemoData = () => {

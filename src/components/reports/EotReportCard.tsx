@@ -277,7 +277,18 @@ export default function EotReportCard({
                   <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
                   <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
                   <td className="border border-black text-left" style={{ verticalAlign: 'middle', padding: 0 }}>
-                    <div style={{ padding: '8px 10px', fontSize: '12.5px', lineHeight: '18px' }}>
+                    <div
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        lineHeight: '16px',
+                        maxHeight: '34px',
+                        overflow: 'hidden',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                      }}
+                    >
                       {commentNodes}
                     </div>
                   </td>
@@ -312,7 +323,18 @@ export default function EotReportCard({
                     </div>
                   </td>
                   <td className="border border-black text-left" style={{ verticalAlign: 'middle', padding: 0 }}>
-                    <div style={{ padding: '8px 10px', fontSize: '12.5px', lineHeight: '18px' }}>
+                    <div
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        lineHeight: '16px',
+                        maxHeight: '34px',
+                        overflow: 'hidden',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                      }}
+                    >
                       {commentNodes}
                     </div>
                   </td>
@@ -358,7 +380,18 @@ export default function EotReportCard({
                   </div>
                 </td>
                 <td className="border border-black text-left" style={{ verticalAlign: 'middle', padding: 0 }}>
-                  <div style={{ padding: '8px 10px', fontSize: '12.5px', lineHeight: '18px' }}>
+                  <div
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      lineHeight: '16px',
+                      maxHeight: '34px',
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}
+                  >
                     {commentNodes}
                   </div>
                 </td>
@@ -448,12 +481,12 @@ export default function EotReportCard({
               color: '#fff',
               fontWeight: 700,
               textAlign: 'center',
-              padding: '4px 6px',
+              padding: '3px 6px',
               border: '1px solid #000',
               borderBottom: 'none',
               borderTop: 'none',
-              fontSize: '11.5px',
-              marginTop: 4,
+              fontSize: '11px',
+              marginTop: 3,
             }}
           >
             CLASS TEACHER&apos;S COMMENT
@@ -461,14 +494,51 @@ export default function EotReportCard({
           <div
             className="border border-black flex-1"
             style={{
-              padding: '8px 12px',
-              fontSize: '13px',
-              lineHeight: 1.45,
-              minHeight: 64,
+              padding: '4px 8px',
+              fontSize: '12px',
+              lineHeight: 1.35,
+              maxHeight: '46px',
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
               boxSizing: 'border-box',
             }}
           >
             {summary.generalComment}
+          </div>
+
+          <div
+            style={{
+              background: '#6b6b6b',
+              color: '#fff',
+              fontWeight: 700,
+              textAlign: 'center',
+              padding: '3px 6px',
+              border: '1px solid #000',
+              borderBottom: 'none',
+              borderTop: 'none',
+              fontSize: '11px',
+              marginTop: 3,
+            }}
+          >
+            HEADTEACHER&apos;S CONDUCT &amp; ATTITUDE REMARK
+          </div>
+          <div
+            className="border border-black flex-1"
+            style={{
+              padding: '4px 8px',
+              fontSize: '12px',
+              lineHeight: 1.3,
+              maxHeight: '42px',
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              boxSizing: 'border-box',
+            }}
+          >
+            {(summary as any)?.conductRemark || (summary as any)?.headteacherComment || 'Demonstrates exemplary conduct, respectful behavior, and strong dedication to academic excellence.'}
           </div>
         </div>
 
@@ -479,28 +549,61 @@ export default function EotReportCard({
               color: '#fff',
               fontWeight: 700,
               textAlign: 'center',
-              padding: '4px 6px',
+              padding: '3px 4px',
               border: '1px solid #000',
               borderBottom: 'none',
-              fontSize: '11.5px',
+              fontSize: '10.5px',
             }}
           >
-            SIGNATURE
+            FORM TEACHER
           </div>
           <div
-            className="border border-black flex-1 flex flex-col items-center justify-center text-center"
-            style={{ padding: '8px 4px', minHeight: 110 }}
+            className="border border-black flex-1 flex flex-col items-center justify-center text-center mb-1"
+            style={{ padding: '4px 2px', minHeight: 48 }}
           >
             <div
               style={{
-                fontSize: '14px',
+                fontSize: '12px',
                 fontWeight: 700,
                 textAlign: 'center',
-                letterSpacing: '0.02em',
-                lineHeight: 1.35,
+                letterSpacing: '0.01em',
+                lineHeight: 1.25,
               }}
             >
               {formatSignatureName(teacherName).map((part, idx) => (
+                <div key={idx}>{part.toUpperCase()}</div>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: '#6b6b6b',
+              color: '#fff',
+              fontWeight: 700,
+              textAlign: 'center',
+              padding: '3px 4px',
+              border: '1px solid #000',
+              borderBottom: 'none',
+              fontSize: '10.5px',
+            }}
+          >
+            HEADTEACHER
+          </div>
+          <div
+            className="border border-black flex-1 flex flex-col items-center justify-center text-center"
+            style={{ padding: '4px 2px', minHeight: 48 }}
+          >
+            <div
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                textAlign: 'center',
+                letterSpacing: '0.01em',
+                lineHeight: 1.25,
+              }}
+            >
+              {formatSignatureName(school.principalSignature || 'HEADTEACHER').map((part, idx) => (
                 <div key={idx}>{part.toUpperCase()}</div>
               ))}
             </div>

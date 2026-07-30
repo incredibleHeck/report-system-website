@@ -139,10 +139,10 @@ export function buildSummaries(params: {
         .filter(Boolean) as AssessmentScore[];
 
       const totals = subjectScores.map((s) => s.totalScore);
-      const rawScore = totals.reduce((a, b) => a + b, 0);
+      const rawScore = Number(totals.reduce((a, b) => a + b, 0).toFixed(2));
       const averageScore =
         totals.length > 0
-          ? Math.round((rawScore / totals.length) * 100) / 100
+          ? Number((rawScore / totals.length).toFixed(2))
           : 0;
       const aveGrade = gradeFromTotal(averageScore).grade;
 
@@ -173,9 +173,9 @@ export function buildSummaries(params: {
         rawScore,
         averageScore,
         aveGrade,
-        bestMark,
+        bestMark: Number(bestMark.toFixed(2)),
         bestGrade,
-        leastMark,
+        leastMark: Number(leastMark.toFixed(2)),
         leastGrade,
         rank: 0,
         peComment: peComments[student.id] || '',
@@ -187,17 +187,37 @@ export function buildSummaries(params: {
         finalized: false,
         subjectLines: buildSubjectLines(classStream, classScores, student),
         _avg: averageScore,
+        _raw: rawScore,
+        _count: totals.length,
       };
     });
 
-  const sorted = [...rows].sort((a, b) => b._avg - a._avg);
+  // Primary averageScore descending, secondary rawScore descending
+  const sorted = [...rows].sort((a, b) => {
+    if (b._avg !== a._avg) return b._avg - a._avg;
+    return b._raw - a._raw;
+  });
+
   let rank = 1;
   sorted.forEach((row, i) => {
-    if (i > 0 && sorted[i - 1]._avg !== row._avg) rank = i + 1;
+    if (row._count === 0 || row._raw === 0) {
+      row.rank = 0;
+      return;
+    }
+    if (i > 0) {
+      const prev = sorted[i - 1];
+      if (
+        prev._count > 0 &&
+        prev._raw > 0 &&
+        (row._avg < prev._avg || (row._avg === prev._avg && row._raw < prev._raw))
+      ) {
+        rank = i + 1;
+      }
+    }
     row.rank = rank;
   });
 
-  return sorted.map(({ _avg, ...rest }) => rest);
+  return sorted.map(({ _avg, _raw, _count, ...rest }) => rest);
 }
 
 export function weakSubjectsForStudent(
