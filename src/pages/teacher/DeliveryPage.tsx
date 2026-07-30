@@ -132,7 +132,8 @@ export default function DeliveryPage() {
       setTimeout(resolve, 250);
     });
     const el = host.querySelector('.eot-report, .midterm-report') as HTMLElement;
-    const fileName = `${student.studentId}_${mode}_Report.pdf`;
+    const cleanStudentName = (student.name || 'Student').replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
+    const fileName = `${cleanStudentName}_${mode}_Report.pdf`;
     const pdf = await elementToPdfBase64(el, fileName);
     root.unmount();
     document.body.removeChild(host);

@@ -49,9 +49,18 @@ export function useMasterSheetData() {
   const isTeacher = currentUser?.role === 'teacher';
   const isHeadteacher = currentUser?.role === 'headteacher';
 
-  // Read-only lock guard: Teachers are read-only on all archived terms (before 2026/2027 Term 1) & Annual view.
+  const normYearIdForLock = (selectedAcademicYearId || '2026/2027').replace('/', '-');
+  const isTermLockedByAdmin = Boolean(
+    systemSettings?.lockedTerms?.[`${normYearIdForLock}_${selectedTermView}`] ||
+    systemSettings?.lockedTerms?.[`${selectedAcademicYearId}_${selectedTermView}`]
+  );
+
+  // Read-only lock guard: Teachers are read-only on archived terms, Annual view, or when locked by Headteacher.
   // Headteachers retain edit access or can toggle adminEditOverride.
-  const isReadOnlyMode = isAnnualView || (isArchivedTerm && (isTeacher || !adminEditOverride));
+  const isReadOnlyMode =
+    isAnnualView ||
+    (isArchivedTerm && (isTeacher || !adminEditOverride)) ||
+    (isTermLockedByAdmin && isTeacher);
 
   // Derive term formats to handle existing/legacy score matches.
   // CRITICAL: Use the active class's own year for term key generation, not the
@@ -81,13 +90,23 @@ export function useMasterSheetData() {
     return getTermKeys(selectedTermView);
   }, [selectedTermView, normYearId, altYearId, year]);
 
+  const showProjectWorkForView = useMemo(() => {
+    if (selectedTermView === 'T1' || selectedTermView === 'T2') return false;
+    if (selectedTermView === 'T3' || selectedTermView === 'ANNUAL') return true;
+    return shouldIncludeProjectWork(activeClass?.settings?.termYearInfo || '');
+  }, [selectedTermView, activeClass?.settings?.termYearInfo]);
+
   const allSubjects = useMemo(() => {
     if (!activeClass) return [];
-    return getSubjectsForProgramme(
+    const subjects = getSubjectsForProgramme(
       activeClass.programme,
-      shouldIncludeProjectWork(activeClass.settings.termYearInfo)
+      showProjectWorkForView
     );
-  }, [activeClass]);
+    // Remove duplicate PE and CLUB subject column blocks from the Master Sheet grid (PE & Club comments are handled in the Form Teacher Remarks section)
+    return subjects.filter(
+      (s) => s.code !== 'PE' && s.code !== 'CLUB' && s.code !== 'CLUBS'
+    );
+  }, [activeClass, showProjectWorkForView]);
 
   const academicSubjects = useMemo(() => {
     return allSubjects.filter((s) => isAcademicSubject(s.code, s.kind));

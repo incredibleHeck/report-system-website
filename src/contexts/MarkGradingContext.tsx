@@ -67,13 +67,57 @@ export function useMarkGradingLogic(state: MarkGradingState) {
     });
   };
 
-  const finalizeReports = (reports: Omit<ReportSummary, 'id'>[]) => {
-    saveSummaries(
-      reports.map((r) => ({
-        ...r,
-        finalized: true,
-        subjectLines: r.subjectLines ?? [],
-      }))
+  const finalizeReports = (reportsOrClassId: Omit<ReportSummary, 'id'>[] | string) => {
+    if (typeof reportsOrClassId === 'string') {
+      const classId = reportsOrClassId;
+      setSummaries((prev) => {
+        const hasMatch = prev.some((s) => s.classId === classId);
+        if (hasMatch) {
+          return prev.map((s) => (s.classId === classId ? { ...s, finalized: true, isFinalized: true } : s));
+        } else {
+          const newSummary: ReportSummary = {
+            id: createId(),
+            classId,
+            studentId: 'CLASS_SUMMARY',
+            academicYear: '2026/2027',
+            termKey: 'T1',
+            mode: 'EOT',
+            finalized: true,
+            isFinalized: true,
+            rawScore: null,
+            averageScore: null,
+            aveGrade: null,
+            bestMark: null,
+            bestGrade: null,
+            leastMark: null,
+            leastGrade: null,
+            rank: null,
+            peComment: '',
+            clubComment: '',
+            generalComment: '',
+            teacherName: '',
+            className: '',
+            programme: 'PRIMARY',
+            subjectLines: [],
+          };
+          return [...prev, newSummary];
+        }
+      });
+    } else {
+      saveSummaries(
+        reportsOrClassId.map((r) => ({
+          ...r,
+          finalized: true,
+          isFinalized: true,
+          subjectLines: r.subjectLines ?? [],
+        }))
+      );
+    }
+  };
+
+  const unfinalizeReports = (classId: string) => {
+    setSummaries((prev) =>
+      prev.map((s) => (s.classId === classId ? { ...s, finalized: false, isFinalized: false } : s))
     );
   };
 
@@ -96,6 +140,7 @@ export function useMarkGradingLogic(state: MarkGradingState) {
         return {
           ...s,
           finalized: false,
+          isFinalized: false,
           subjectLines: null,
           rawScore: null,
           averageScore: null,
@@ -157,6 +202,7 @@ export function useMarkGradingLogic(state: MarkGradingState) {
     saveSummaries,
     replaceSummaries,
     finalizeReports,
+    unfinalizeReports,
     unfinalizeReport,
     saveSubjectContext,
     saveSubjectResults,

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useActiveClass, useDatabase } from '../../context/DatabaseContext';
 import { useAuth } from '../../context/AuthContext';
-import { detectTermNumber, shouldIncludeProjectWork } from '../../lib/term';
+import { detectTermNumber, shouldIncludeProjectWork, formatDateLong } from '../../lib/term';
 
 export default function ClassSettings() {
   const { currentUser } = useAuth();
@@ -110,17 +110,25 @@ export default function ClassSettings() {
 
         {(
           [
-            ['teacherName', 'Class Teacher Name'],
-            ['reportDate', 'Vacation / Report Date'],
-            ['nextTermBegins', 'Next Term Begins'],
-            ['schoolBreaks', 'Midterm: School Breaks'],
-            ['schoolResumes', 'Midterm: School Resumes'],
+            ['teacherName', 'Class Teacher Name', 'text'],
+            ['reportDate', 'Vacation / Report Date', 'date'],
+            ['nextTermBegins', 'Next Term Begins', 'date'],
+            ['schoolBreaks', 'Midterm: School Breaks', 'date'],
+            ['schoolResumes', 'Midterm: School Resumes', 'date'],
           ] as const
-        ).map(([key, label]) => (
+        ).map(([key, label, inputType]) => (
           <label key={key} className="block text-sm font-medium text-sais-black">
-            <span className="text-sais-muted">{label}</span>
+            <div className="flex justify-between items-center">
+              <span className="text-sais-muted">{label}</span>
+              {inputType === 'date' && form?.[key] && (
+                <span className="text-xs font-semibold text-sais-red">
+                  Report Format: {formatDateLong(form[key])}
+                </span>
+              )}
+            </div>
             <input
-              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs"
+              type={inputType}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red transition-all shadow-xs cursor-pointer"
               value={String(form[key] ?? '')}
               onChange={(e) => set(key, e.target.value)}
             />

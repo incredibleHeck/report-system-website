@@ -90,8 +90,11 @@ export function yearStartFromAcademicYear(academicYear: string): number {
   return m ? Number(m[1]) : new Date().getFullYear();
 }
 
-export function formatStudentKey(yearJoined: number, sequence: number): string {
-  return `SAIS-${yearJoined}-${String(sequence).padStart(4, '0')}`;
+export function formatStudentKey(sequence: number): string;
+export function formatStudentKey(yearJoined: number, sequence: number): string;
+export function formatStudentKey(arg1: number, arg2?: number): string {
+  const sequence = arg2 !== undefined ? arg2 : arg1;
+  return `SAIS-STU-${String(sequence).padStart(4, '0')}`;
 }
 
 export const ALL_TERMS: TermCode[] = ['T1', 'T2', 'T3'];

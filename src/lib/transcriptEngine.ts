@@ -1,4 +1,6 @@
 import { academicYearLabel, buildTermKey, termNumberFromCode, toCanonicalTermKey, parseTermKey } from './academicYear';
+import { getSubjectByCode } from './programmeSchemas';
+import { gradeFromTotal } from './grading';
 import type {
   ClassEnrollment,
   LifelongStudent,
@@ -6,6 +8,7 @@ import type {
   SubjectLineSnapshot,
   TermCode,
   Student,
+  AssessmentScore,
 } from '../types';
 
 export interface MultiYearTermBlock {
@@ -44,6 +47,7 @@ export interface TranscriptEngineDataSource {
   lifelongStudents: LifelongStudent[];
   enrollments: ClassEnrollment[];
   summaries: ReportSummary[];
+  scores?: AssessmentScore[];
   students?: Student[];
 }
 
@@ -117,6 +121,48 @@ export function buildMultiYearTranscript(
         return sCanonical === termKey;
       });
 
+      // Build subjectLines from summary if present, otherwise fallback to source.scores
+      let rawSubjectLines: SubjectLineSnapshot[] = summary?.subjectLines && summary.subjectLines.length > 0
+        ? summary.subjectLines
+        : [];
+
+      if (rawSubjectLines.length === 0 && source.scores && source.scores.length > 0) {
+        const studentScores = source.scores.filter((sc) => {
+          const matchStudent =
+            sc.studentId === en.studentId ||
+            sc.studentId === student.id ||
+            sc.studentId === en.rollNumber ||
+            sc.studentId === student.studentKey;
+          if (!matchStudent || sc.mode !== 'EOT') return false;
+          const parsed = parseTermKey(sc.termKey);
+          const scCanonical = toCanonicalTermKey(sc.academicYear || parsed.academicYear, parsed.termCode || 'T1');
+          return scCanonical === termKey;
+        });
+
+        rawSubjectLines = studentScores
+          .filter((sc) => sc.totalScore !== null && sc.totalScore !== undefined)
+          .map((sc) => {
+            const prog = (en.programme || 'PRIMARY') as any;
+            const subDef = getSubjectByCode(prog, sc.subjectCode);
+            const tot = sc.totalScore ?? 0;
+            return {
+              code: sc.subjectCode,
+              name: subDef?.name || sc.subjectCode,
+              totalScore: tot,
+              grade: typeof sc.grade === 'string' && sc.grade ? sc.grade : gradeFromTotal(tot).grade,
+            };
+          });
+      }
+
+      const subjectLines = rawSubjectLines.filter((l) => l.code !== 'MUSIC' && l.code !== 'PROJ');
+
+      const calcAvg = subjectLines.length > 0
+        ? Number((subjectLines.reduce((acc, l) => acc + l.totalScore, 0) / subjectLines.length).toFixed(2))
+        : null;
+
+      const averageScore = summary?.averageScore ?? calcAvg;
+      const aveGrade = summary?.aveGrade ?? (calcAvg !== null ? gradeFromTotal(calcAvg).grade : null);
+
       blocks.push({
         academicYear: en.academicYear,
         termCode,
@@ -127,11 +173,11 @@ export function buildMultiYearTranscript(
         rollNumber: en.rollNumber,
         index: en.index,
         attendance: en.attendance ?? 60,
-        averageScore: summary?.averageScore ?? null,
-        aveGrade: summary?.aveGrade ?? null,
+        averageScore,
+        aveGrade,
         rank: summary?.rank ?? null,
-        finalized: summary?.finalized ?? false,
-        subjectLines: summary?.subjectLines ?? [],
+        finalized: summary?.finalized ?? (subjectLines.length > 0),
+        subjectLines,
         generalComment: summary?.generalComment || '',
         peComment: summary?.peComment || '',
         clubComment: summary?.clubComment || '',

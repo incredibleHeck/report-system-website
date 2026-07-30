@@ -320,6 +320,135 @@ export function useStudentRegistryLogic(state: StudentRegistryState) {
     });
   };
 
+  const bulkAddStudents = (
+    classId: string,
+    items: Array<{
+      rollNumber: string;
+      name: string;
+      gender: 'Male' | 'Female' | 'Unknown';
+      index?: string;
+      enrolledTerms?: TermCode[];
+    }>
+  ) => {
+    const cls = classes.find((c) => c.id === classId);
+    if (!cls) throw new Error('Class not found');
+    const academicYear = parseAcademicYear(cls.settings.termYearInfo);
+
+    let nextSeq = { ...keySeq };
+    const newLifeRecords: LifelongStudent[] = [];
+    const newEnrollments: ClassEnrollment[] = [];
+    const newContacts: Contact[] = [];
+
+    items.forEach((item, idx) => {
+      const rollNumber = item.rollNumber.trim().toUpperCase();
+      if (
+        enrollments.some(
+          (e) => e.classId === classId && e.academicYear === academicYear && e.rollNumber === rollNumber
+        ) ||
+        newEnrollments.some((e) => e.rollNumber === rollNumber)
+      ) {
+        throw new Error(`Duplicate roll number ${rollNumber} in class ${cls.name}`);
+      }
+
+      const yearJoined = yearStartFromAcademicYear(academicYear);
+      const minted = mintStudentKey(yearJoined, nextSeq);
+      const studentKey = minted.studentKey;
+      nextSeq = minted.seq;
+
+      const lifeId = createId();
+      const life: LifelongStudent = {
+        id: lifeId,
+        studentKey,
+        name: item.name.trim().toUpperCase(),
+        gender: item.gender,
+        schoolId: cls.schoolId,
+        yearJoined,
+        status: 'active',
+      };
+
+      const index = item.index || String(idx + 1).padStart(3, '0');
+      const enrollment = enrollmentFromClass(cls, {
+        id: createId(),
+        studentId: lifeId,
+        studentKey,
+        classId,
+        rollNumber,
+        index,
+        attendance: cls.settings.attendanceTotal ?? 60,
+        enrolledTerms: item.enrolledTerms ?? ALL_TERMS,
+      });
+
+      newLifeRecords.push(life);
+      newEnrollments.push(enrollment);
+      newContacts.push({
+        id: createId(),
+        studentId: lifeId,
+        classId,
+        phone: '',
+        email: '',
+        pdfId: '',
+        midtermPdfId: '',
+        whatsappStatus: '',
+        emailStatus: '',
+      });
+    });
+
+    setKeySeq(nextSeq);
+    setLifelongStudents((prev) => [...prev, ...newLifeRecords]);
+    setEnrollments((prev) => [...prev, ...newEnrollments]);
+    setContacts((prev) => [...prev, ...newContacts]);
+  };
+
+  const bulkPromoteStudents = (
+    promotions: Array<{
+      studentKey: string;
+      targetClassId: string;
+      rollNumber: string;
+      index?: string;
+      enrolledTerms?: TermCode[];
+    }>
+  ) => {
+    const newEnrollments: ClassEnrollment[] = [];
+
+    promotions.forEach((p, idx) => {
+      const life = findLifelongByRef(p.studentKey);
+      if (!life) throw new Error(`Student ${p.studentKey} not found`);
+
+      const cls = classes.find((c) => c.id === p.targetClassId);
+      if (!cls) throw new Error(`Target class ${p.targetClassId} not found`);
+
+      const academicYear = parseAcademicYear(cls.settings.termYearInfo);
+      const rollNumber = p.rollNumber.trim().toUpperCase();
+
+      if (
+        enrollments.some(
+          (e) => e.studentKey === life.studentKey && e.academicYear === academicYear
+        ) ||
+        newEnrollments.some(
+          (e) => e.studentKey === life.studentKey && e.academicYear === academicYear
+        )
+      ) {
+        throw new Error(`${life.name} (${life.studentKey}) is already enrolled in ${academicYear}`);
+      }
+
+      const index = p.index || String(idx + 1).padStart(3, '0');
+      const enrollment = enrollmentFromClass(cls, {
+        id: createId(),
+        studentId: life.id,
+        studentKey: life.studentKey,
+        classId: p.targetClassId,
+        rollNumber,
+        index,
+        attendance: cls.settings.attendanceTotal ?? 60,
+        enrolledTerms: p.enrolledTerms ?? ALL_TERMS,
+      });
+
+      newEnrollments.push(enrollment);
+    });
+
+    setEnrollments((prev) => [...prev, ...newEnrollments]);
+  };
+
   return {
     lifelongStudents,
     enrollments,
@@ -333,6 +462,8 @@ export function useStudentRegistryLogic(state: StudentRegistryState) {
     upsertContact,
     updateContactStatus,
     mergeBannedTokens,
+    bulkAddStudents,
+    bulkPromoteStudents,
   };
 }
 

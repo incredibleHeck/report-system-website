@@ -134,7 +134,8 @@ export async function buildTranscript(
   if (!multiYear) return null;
 
   const blocks: TranscriptTermBlock[] = multiYear.blocks.map((b) => {
-    if (b.finalized && b.subjectLines && b.subjectLines.length > 0) {
+    const hasLines = Boolean(b.subjectLines && b.subjectLines.length > 0);
+    if (hasLines || b.finalized || (b.averageScore !== null && b.averageScore > 0)) {
       return {
         kind: 'finalized',
         academicYear: b.academicYear,

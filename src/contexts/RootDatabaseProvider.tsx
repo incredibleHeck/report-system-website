@@ -115,7 +115,12 @@ export function RootDatabaseProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
       if (!ready) return;
       if (isInitialRender.current) { isInitialRender.current = false; return; }
-      void activeRepository.saveCollection(collectionName, data);
+      activeRepository.saveCollection(collectionName, data).catch((err) => {
+        console.error(`Failed to save collection ${collectionName}:`, err);
+        window.alert(
+          'CRITICAL: Network sync failed. Your recent changes were not saved to the database. Please check your internet connection and refresh the page.'
+        );
+      });
     }, [data, ready, collectionName]);
   }
 

@@ -4,7 +4,7 @@ import {
   getSubjectsForTerm,
   PROGRAMME_SCHEMAS,
 } from '../../lib/programmeSchemas';
-import { parseYearTerm, shouldIncludeProjectWork } from '../../lib/term';
+import { parseYearTerm, shouldIncludeProjectWork, formatDateLong, formatSignatureName } from '../../lib/term';
 import type {
   AssessmentScore,
   ClassStream,
@@ -32,14 +32,12 @@ const SAIS_DEFAULTS = {
   tel: '020 798 8167 / 027 064 0112 / 024 597 0186',
 };
 
+const THEME_RED = '#c41e3a';
+
 function fmt(n: number | undefined | null) {
   if (n === undefined || n === null || Number.isNaN(n)) return '';
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
 }
-
-const cell = 'border border-black px-1 py-0.5 align-middle';
-const cellCenter = `${cell} text-center`;
-const inactive = `${cellCenter} bg-[#8a8a8a]`;
 
 export default function EotReportCard({
   school,
@@ -50,15 +48,15 @@ export default function EotReportCard({
   classAverages,
   rollCount,
 }: EotReportCardProps) {
-  const termInfo = classStream.settings.termYearInfo;
-  const includeProject = shouldIncludeProjectWork(termInfo);
-  const subjects = getSubjectsForTerm(classStream.programme, termInfo).filter(
+  const effectiveTermInfo = summary?.termKey || scores[0]?.termKey || classStream.settings.termYearInfo;
+  const includeProject = shouldIncludeProjectWork(effectiveTermInfo);
+  const subjects = getSubjectsForTerm(classStream.programme, effectiveTermInfo).filter(
     (s) => !(s.code === 'MUSIC' && !PROGRAMME_SCHEMAS[classStream.programme].hasMusic)
   );
 
   const scoreMap = Object.fromEntries(scores.map((s) => [s.subjectCode, s]));
   const outOf = getReportOutOf(classStream.programme);
-  const { year, term, termNumber } = parseYearTerm(termInfo);
+  const { year, term, termNumber } = parseYearTerm(effectiveTermInfo);
   const teacherName = summary.teacherName || classStream.settings.teacherName || '—';
 
   const name = school.name || SAIS_DEFAULTS.name;
@@ -68,7 +66,6 @@ export default function EotReportCard({
   const tel = school.tel || SAIS_DEFAULTS.tel;
   const onRoll = rollCount ?? (Number(student.index) || student.index);
 
-  // A4 landscape target width (~297mm at 96dpi). Compact so most reports fit 1 page, max 2.
   return (
     <div
       className="eot-report bg-white text-black"
@@ -77,34 +74,34 @@ export default function EotReportCard({
       style={{
         width: '1100px',
         maxWidth: '1100px',
-        padding: '10px 14px 8px',
+        padding: '16px 20px 14px',
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: '10px',
+        fontSize: '13px',
         color: '#000',
         boxSizing: 'border-box',
       }}
     >
       {/* Header */}
-      <div className="flex items-start gap-2 mb-1">
+      <div className="flex items-start gap-4 mb-3">
         <img
           src="/sais-logo.png"
           alt="St. Adelaide International Schools"
-          width={78}
-          height={78}
-          style={{ width: 78, height: 78, objectFit: 'contain', flexShrink: 0 }}
+          width={84}
+          height={84}
+          style={{ width: 84, height: 84, objectFit: 'contain', flexShrink: 0 }}
         />
         <div className="flex-1 min-w-0 pt-0.5">
           <h1
             style={{
-              fontSize: '22px',
+              fontSize: '24px',
               fontWeight: 800,
-              lineHeight: 1.1,
+              lineHeight: 1.15,
               margin: 0,
             }}
           >
             {name}
           </h1>
-          <div style={{ marginTop: 2, fontSize: '11px', lineHeight: 1.3 }}>
+          <div style={{ marginTop: 3, fontSize: '12px', lineHeight: 1.4 }}>
             <div>{address}</div>
             <div>
               website:{' '}
@@ -118,15 +115,15 @@ export default function EotReportCard({
         </div>
         <div
           style={{
-            background: '#c41e3a',
+            background: THEME_RED,
             color: '#fff',
             fontWeight: 800,
-            fontSize: '13px',
-            padding: '8px 12px',
+            fontSize: '14px',
+            padding: '10px 14px',
             alignSelf: 'center',
             textAlign: 'center',
-            lineHeight: 1.2,
-            minWidth: 118,
+            lineHeight: 1.25,
+            minWidth: 128,
             flexShrink: 0,
           }}
         >
@@ -138,49 +135,50 @@ export default function EotReportCard({
 
       {/* Student info */}
       <div
+        className="avoid-break"
         style={{
-          borderTop: '2.5px solid #000',
-          borderBottom: '1.5px solid #000',
-          padding: '4px 2px',
-          marginBottom: 4,
+          borderTop: `3px solid ${THEME_RED}`,
+          borderBottom: `3px solid ${THEME_RED}`,
+          padding: '6px 4px',
+          marginBottom: 8,
         }}
       >
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
           <tbody>
             <tr>
-              <td style={{ width: '34%', padding: '1px 4px' }}>
+              <td style={{ width: '34%', padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Student Name:</strong> {student.name}
               </td>
-              <td style={{ width: '33%', padding: '1px 4px' }}>
+              <td style={{ width: '33%', padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Student ID:</strong> {student.studentId}
               </td>
-              <td style={{ width: '33%', padding: '1px 4px' }}>
+              <td style={{ width: '33%', padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>No. on Roll:</strong> {onRoll}
               </td>
             </tr>
             <tr>
-              <td style={{ padding: '1px 4px' }}>
+              <td style={{ padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Class:</strong> {classStream.name}
               </td>
-              <td style={{ padding: '1px 4px' }}>
+              <td style={{ padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Attendance:</strong> {student.attendance} /{' '}
                 {classStream.settings.attendanceTotal}
               </td>
-              <td style={{ padding: '1px 4px' }}>
+              <td style={{ padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Year:</strong> {year} <strong>Term:</strong> {term}
               </td>
             </tr>
             <tr>
-              <td style={{ padding: '1px 4px' }}>
+              <td style={{ padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Programme:</strong> {classStream.programme}
               </td>
-              <td style={{ padding: '1px 4px' }}>
+              <td style={{ padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Vacation Date:</strong>{' '}
-                {(classStream.settings.reportDate || '—').toUpperCase()}
+                {formatDateLong(classStream.settings.reportDate)}
               </td>
-              <td style={{ padding: '1px 4px' }}>
+              <td style={{ padding: '4px 4px', verticalAlign: 'middle' }}>
                 <strong>Next Term Begins:</strong>{' '}
-                {(classStream.settings.nextTermBegins || '—').toUpperCase()}
+                {formatDateLong(classStream.settings.nextTermBegins)}
               </td>
             </tr>
           </tbody>
@@ -190,68 +188,98 @@ export default function EotReportCard({
       {/* Marks table */}
       <table
         className="w-full border-collapse"
-        style={{ fontSize: '10px', marginBottom: 4, tableLayout: 'fixed' }}
+        style={{ fontSize: '13px', marginBottom: 8, tableLayout: 'fixed' }}
       >
         <colgroup>
-          <col style={{ width: '10%' }} />
+          <col style={{ width: '12%' }} />
           <col style={{ width: '5.5%' }} />
           <col style={{ width: '5.5%' }} />
           <col style={{ width: '6.5%' }} />
           <col style={{ width: '5.5%' }} />
           <col style={{ width: '5.5%' }} />
           <col style={{ width: '4.5%' }} />
-          <col style={{ width: '57%' }} />
+          <col style={{ width: '55%' }} />
         </colgroup>
         <thead>
           <tr style={{ background: '#6b6b6b', color: '#ffffff' }}>
-            <th className={`${cell} text-left font-bold`} style={{ color: '#ffffff' }}>
-              Subject
+            <th className="border border-black font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 8px', fontSize: '13px', lineHeight: '18px', textAlign: 'left', color: '#ffffff' }}>
+                Subject
+              </div>
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
-              Class Score (20)
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 3px', fontSize: '11px', lineHeight: '14px', color: '#ffffff' }}>
+                Class Score (20)
+              </div>
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
-              Mid Term Score (20)
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 3px', fontSize: '11px', lineHeight: '14px', color: '#ffffff' }}>
+                Mid Term Score (20)
+              </div>
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
-              End of Term Exams Score (60)
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 3px', fontSize: '11px', lineHeight: '14px', color: '#ffffff' }}>
+                End of Term Exams Score (60)
+              </div>
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
-              Total Score (100)
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 3px', fontSize: '11px', lineHeight: '14px', color: '#ffffff' }}>
+                Total Score (100)
+              </div>
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '7.5px', padding: '1px' }}>
-              Class Average
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 3px', fontSize: '11px', lineHeight: '14px', color: '#ffffff' }}>
+                Class Average
+              </div>
             </th>
-            <th className={`${cellCenter} font-bold`} style={{ color: '#ffffff', fontSize: '8px' }}>
-              Grade
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 3px', fontSize: '12px', lineHeight: '16px', color: '#ffffff' }}>
+                Grade
+              </div>
             </th>
-            <th className={`${cell} text-center font-bold`} style={{ color: '#ffffff' }}>
-              Subject Teacher&apos;s Comment
+            <th className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+              <div style={{ padding: '10px 8px', fontSize: '13px', lineHeight: '18px', color: '#ffffff' }}>
+                Subject Teacher&apos;s Comment
+              </div>
             </th>
           </tr>
         </thead>
         <tbody>
           {subjects.map((sub) => {
             const sc = scoreMap[sub.code];
-            const comment =
+            const rawComment = (
               sub.code === 'PE'
                 ? summary.peComment || sc?.comment || ''
                 : sub.code === 'CLUB'
                   ? summary.clubComment || sc?.comment || ''
-                  : sc?.comment || '';
+                  : sc?.comment || ''
+            ).trim();
+
+            const commentNodes = rawComment.split('\n').map((line, i, arr) => (
+              <span key={i}>
+                {line}
+                {i < arr.length - 1 && <br />}
+              </span>
+            ));
 
             if (sub.kind === 'commentOnly') {
               return (
                 <tr key={sub.code}>
-                  <td className={`${cell} font-bold`}>{sub.name}</td>
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={`${cell} text-left align-top`} style={{ fontSize: '12px', lineHeight: 1.25 }}>
-                    {comment}
+                  <td className="border border-black font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px', fontSize: '13px', lineHeight: '18px', textAlign: 'left' }}>
+                      {sub.name}
+                    </div>
+                  </td>
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black text-left" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px 10px', fontSize: '12.5px', lineHeight: '18px' }}>
+                      {commentNodes}
+                    </div>
                   </td>
                 </tr>
               );
@@ -260,17 +288,33 @@ export default function EotReportCard({
             if (sub.kind === 'scoreOnly') {
               return (
                 <tr key={sub.code}>
-                  <td className={`${cell} font-bold`}>{sub.name}</td>
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={inactive} />
-                  <td className={cellCenter}>{fmt(sc?.totalScore)}</td>
-                  <td className={cellCenter}>
-                    {fmt(classAverages[sub.code] ?? sc?.classAverage)}
+                  <td className="border border-black font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px', fontSize: '13px', lineHeight: '18px', textAlign: 'left' }}>
+                      {sub.name}
+                    </div>
                   </td>
-                  <td className={`${cellCenter} font-bold`}>{sc?.grade ?? ''}</td>
-                  <td className={`${cell} text-left align-top`} style={{ fontSize: '12px', lineHeight: 1.25 }}>
-                    {comment}
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black bg-[#8a8a8a]" style={{ verticalAlign: 'middle', padding: 0 }} />
+                  <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                      {fmt(sc?.totalScore)}
+                    </div>
+                  </td>
+                  <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                      {fmt(classAverages[sub.code] ?? sc?.classAverage)}
+                    </div>
+                  </td>
+                  <td className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px 4px', fontSize: '13.5px', lineHeight: '18px' }}>
+                      {sc?.grade ?? ''}
+                    </div>
+                  </td>
+                  <td className="border border-black text-left" style={{ verticalAlign: 'middle', padding: 0 }}>
+                    <div style={{ padding: '8px 10px', fontSize: '12.5px', lineHeight: '18px' }}>
+                      {commentNodes}
+                    </div>
                   </td>
                 </tr>
               );
@@ -278,17 +322,45 @@ export default function EotReportCard({
 
             return (
               <tr key={sub.code}>
-                <td className={`${cell} font-bold`}>{sub.name}</td>
-                <td className={cellCenter}>{fmt(sc?.cwScore)}</td>
-                <td className={cellCenter}>{fmt(sc?.mtScore)}</td>
-                <td className={cellCenter}>{fmt(sc?.eotScore)}</td>
-                <td className={cellCenter}>{fmt(sc?.totalScore)}</td>
-                <td className={cellCenter}>
-                  {fmt(classAverages[sub.code] ?? sc?.classAverage)}
+                <td className="border border-black font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px', fontSize: '13px', lineHeight: '18px', textAlign: 'left' }}>
+                    {sub.name}
+                  </div>
                 </td>
-                <td className={`${cellCenter} font-bold`}>{sc?.grade ?? ''}</td>
-                <td className={`${cell} text-left align-top`} style={{ fontSize: '12px', lineHeight: 1.25 }}>
-                  {comment}
+                <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                    {fmt(sc?.cwScore)}
+                  </div>
+                </td>
+                <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                    {fmt(sc?.mtScore)}
+                  </div>
+                </td>
+                <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                    {fmt(sc?.eotScore)}
+                  </div>
+                </td>
+                <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                    {fmt(sc?.totalScore)}
+                  </div>
+                </td>
+                <td className="border border-black text-center" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 4px', fontSize: '13px', lineHeight: '18px' }}>
+                    {fmt(classAverages[sub.code] ?? sc?.classAverage)}
+                  </div>
+                </td>
+                <td className="border border-black text-center font-bold" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 4px', fontSize: '13.5px', lineHeight: '18px' }}>
+                    {sc?.grade ?? ''}
+                  </div>
+                </td>
+                <td className="border border-black text-left" style={{ verticalAlign: 'middle', padding: 0 }}>
+                  <div style={{ padding: '8px 10px', fontSize: '12.5px', lineHeight: '18px' }}>
+                    {commentNodes}
+                  </div>
                 </td>
               </tr>
             );
@@ -296,30 +368,30 @@ export default function EotReportCard({
         </tbody>
       </table>
 
-      <div style={{ borderTop: '2px solid #c41e3a', margin: '2px 0 4px' }} />
+      <div style={{ borderTop: `3px solid ${THEME_RED}`, margin: '6px 0 8px' }} />
 
       {/* Footer */}
-      <div className="flex gap-1.5 items-stretch" style={{ minHeight: 132 }}>
-        <div style={{ width: '27%' }}>
+      <div className="flex gap-2 items-stretch avoid-break" style={{ minHeight: 140 }}>
+        <div style={{ width: '26.5%' }}>
           <div
             style={{
               background: '#6b6b6b',
               color: '#fff',
               fontWeight: 700,
               textAlign: 'center',
-              padding: '2px 4px',
+              padding: '4px 6px',
               border: '1px solid #000',
               borderBottom: 'none',
-              fontSize: '10px',
+              fontSize: '11.5px',
             }}
           >
             GRADING SYSTEM
           </div>
-          <table className="w-full border-collapse" style={{ fontSize: '9px' }}>
+          <table className="w-full border-collapse" style={{ fontSize: '11.5px' }}>
             <tbody>
               {GRADING_LEGEND.map((g) => (
                 <tr key={g.grade}>
-                  <td className={cell} style={{ whiteSpace: 'nowrap', padding: '1px 4px' }}>
+                  <td className="border border-black" style={{ verticalAlign: 'middle', padding: '4px 6px', fontSize: '11.5px', lineHeight: 1.35, whiteSpace: 'nowrap' }}>
                     {g.range} : <strong>{g.grade}</strong> : ({g.label})
                   </td>
                 </tr>
@@ -328,42 +400,42 @@ export default function EotReportCard({
           </table>
         </div>
 
-        <div style={{ width: '49%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: '57.5%', display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               background: '#6b6b6b',
               color: '#fff',
               fontWeight: 700,
               textAlign: 'center',
-              padding: '2px 4px',
+              padding: '4px 6px',
               border: '1px solid #000',
               borderBottom: 'none',
-              fontSize: '10px',
+              fontSize: '11.5px',
             }}
           >
             PERFORMANCE ANALYSIS
           </div>
-          <table className="w-full border-collapse" style={{ fontSize: '10px' }}>
+          <table className="w-full border-collapse" style={{ fontSize: '13px' }}>
             <tbody>
               <tr>
-                <td className={cell}>
+                <td className="border border-black" style={{ verticalAlign: 'middle', padding: '7px 8px', fontSize: '13px', lineHeight: 1.35 }}>
                   Raw Score: <strong>{fmt(summary.rawScore)}</strong>
                 </td>
-                <td className={cell}>
+                <td className="border border-black" style={{ verticalAlign: 'middle', padding: '7px 8px', fontSize: '13px', lineHeight: 1.35 }}>
                   Out of: <strong>{outOf}</strong>
                 </td>
-                <td className={cell}>
+                <td className="border border-black" style={{ verticalAlign: 'middle', padding: '7px 8px', fontSize: '13px', lineHeight: 1.35 }}>
                   Average Mark: <strong>{fmt(summary.averageScore)}</strong>
                 </td>
               </tr>
               <tr>
-                <td className={cell}>
+                <td className="border border-black" style={{ verticalAlign: 'middle', padding: '7px 8px', fontSize: '13px', lineHeight: 1.35 }}>
                   Average Grade: <strong>{summary.aveGrade}</strong>
                 </td>
-                <td className={cell}>
+                <td className="border border-black" style={{ verticalAlign: 'middle', padding: '7px 8px', fontSize: '13px', lineHeight: 1.35 }}>
                   Best Grade: <strong>{summary.bestGrade}</strong>
                 </td>
-                <td className={cell}>
+                <td className="border border-black" style={{ verticalAlign: 'middle', padding: '7px 8px', fontSize: '13px', lineHeight: 1.35 }}>
                   Worst Grade: <strong>{summary.leastGrade}</strong>
                 </td>
               </tr>
@@ -376,12 +448,12 @@ export default function EotReportCard({
               color: '#fff',
               fontWeight: 700,
               textAlign: 'center',
-              padding: '2px 4px',
+              padding: '4px 6px',
               border: '1px solid #000',
               borderBottom: 'none',
               borderTop: 'none',
-              fontSize: '10px',
-              marginTop: 3,
+              fontSize: '11.5px',
+              marginTop: 4,
             }}
           >
             CLASS TEACHER&apos;S COMMENT
@@ -389,51 +461,54 @@ export default function EotReportCard({
           <div
             className="border border-black flex-1"
             style={{
-              padding: '4px 6px',
-              fontSize: '10px',
-              lineHeight: 1.3,
-              minHeight: 56,
+              padding: '8px 12px',
+              fontSize: '13px',
+              lineHeight: 1.45,
+              minHeight: 64,
+              boxSizing: 'border-box',
             }}
           >
             {summary.generalComment}
           </div>
         </div>
 
-        <div style={{ width: '24%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ width: '16%', display: 'flex', flexDirection: 'column' }}>
           <div
             style={{
               background: '#6b6b6b',
               color: '#fff',
               fontWeight: 700,
               textAlign: 'center',
-              padding: '2px 4px',
+              padding: '4px 6px',
               border: '1px solid #000',
               borderBottom: 'none',
-              fontSize: '10px',
+              fontSize: '11.5px',
             }}
           >
             SIGNATURE
           </div>
           <div
-            className="border border-black flex-1 flex flex-col items-center justify-center"
-            style={{ padding: '8px 6px', minHeight: 110 }}
+            className="border border-black flex-1 flex flex-col items-center justify-center text-center"
+            style={{ padding: '8px 4px', minHeight: 110 }}
           >
             <div
               style={{
-                fontSize: '15px',
+                fontSize: '14px',
                 fontWeight: 700,
                 textAlign: 'center',
                 letterSpacing: '0.02em',
-                lineHeight: 1.3,
+                lineHeight: 1.35,
               }}
             >
-              {teacherName.toUpperCase()}
+              {formatSignatureName(teacherName).map((part, idx) => (
+                <div key={idx}>{part.toUpperCase()}</div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ borderTop: '2px solid #c41e3a', marginTop: 6 }} />
+      <div style={{ borderTop: `3px solid ${THEME_RED}`, marginTop: 8 }} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useLocation } from 'react-router-dom';
-import { useActiveClass, useDatabase, termKeyFromSettings } from '../../context/DatabaseContext';
+import { useActiveClass, useDatabase, getStreamYearId, normalizeYearId } from '../../context/DatabaseContext';
 import { buildSummaries, computeClassAverages, scoresForClass } from '../../lib/reportMath';
 import { getSubjectsForTerm } from '../../lib/programmeSchemas';
 import { downloadBlob, elementToPdfBase64 } from '../../lib/pdf';
@@ -13,8 +13,42 @@ import type { ReportMode, ReportSummary } from '../../types';
 
 export default function ReportsPage() {
   const location = useLocation();
-  const { activeClass, classStudents, selectedAcademicYearId } = useActiveClass();
-  const { schools, students, scores, summaries, updateContactStatus, saveSummaries } = useDatabase();
+  const {
+    activeClass,
+    classStudents,
+    selectedAcademicYearId,
+    setSelectedAcademicYearId,
+    setActiveClassId,
+  } = useActiveClass();
+  const {
+    schools,
+    students,
+    scores,
+    summaries,
+    updateContactStatus,
+    saveSummaries,
+    classes,
+    currentUser,
+  } = useDatabase();
+
+  const userClasses = useMemo(() => {
+    const userId = currentUser?.id || (currentUser as any)?.uid;
+    if (!userId) return classes || [];
+    const isHT = currentUser?.role === 'headteacher';
+    if (isHT) return classes || [];
+    return (classes || []).filter(
+      (c) =>
+        c.teacherId === userId ||
+        (c as any).formTeacherId === userId ||
+        c.subjectTeachers?.some((st) => st.teacherId === userId)
+    );
+  }, [classes, currentUser]);
+
+  const displayStreams = useMemo(() => {
+    return userClasses.filter(
+      (cs) => normalizeYearId(getStreamYearId(cs)) === normalizeYearId(selectedAcademicYearId)
+    );
+  }, [userClasses, selectedAcademicYearId]);
 
   const [mode, setMode] = useState<ReportMode>('EOT');
   const [selectedTermView, setSelectedTermView] = useState<'T1' | 'T2' | 'T3'>('T1');
@@ -49,9 +83,9 @@ export default function ReportsPage() {
     if (!activeClass) return {};
     return computeClassAverages(
       classScores,
-      getSubjectsForTerm(activeClass.programme, activeClass.settings.termYearInfo).map((s) => s.code)
+      getSubjectsForTerm(activeClass.programme, canonicalTermKey).map((s) => s.code)
     );
-  }, [classScores, activeClass]);
+  }, [classScores, activeClass, canonicalTermKey]);
 
   const reportRows = useMemo(() => {
     if (!activeClass) return [] as ReportSummary[];
@@ -202,7 +236,8 @@ export default function ReportsPage() {
       });
 
       const el = host.querySelector('.eot-report, .midterm-report') as HTMLElement;
-      const fileName = `${student.studentId || student.id}_${mode}_Report.pdf`;
+      const cleanStudentName = (student.name || 'Student').replace(/[^a-zA-Z0-9\s-]/g, '').trim().replace(/\s+/g, '_');
+      const fileName = `${cleanStudentName}_${mode}_Report.pdf`;
       const pdf = await elementToPdfBase64(el, fileName);
       return { pdf, student, summary };
     } finally {
@@ -275,20 +310,62 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      {/* Top Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+      {/* Top Header Controls Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Student Reports & PDF Engine</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Official A4 Landscape Report Cards · Term: {selectedTermView} ({classOwnYear.replace('-', '/')})
+          <p className="text-xs text-slate-500 mt-0.5">
+            Official A4 Landscape Report Cards · Term: {selectedTermView} ({classOwnYear.replace('-', '/')}) · Class: <span className="font-semibold text-slate-800">{activeClass?.name || '—'}</span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+
+        <div className="flex flex-wrap gap-2.5 items-center">
+          {/* Academic Year Selector */}
+          <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Year:</span>
+            <select
+              className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+              value={selectedAcademicYearId}
+              onChange={(e) => setSelectedAcademicYearId(e.target.value)}
+              disabled={busy}
+            >
+              <option value="2026/2027">2026/2027 (Active Pointer)</option>
+              <option value="2025/2026">2025/2026 (Archived)</option>
+              <option value="2024/2025">2024/2025 (Archived)</option>
+              <option value="2023/2024">2023/2024 (Archived)</option>
+              <option value="2022/2023">2022/2023 (Archived)</option>
+              <option value="2021/2022">2021/2022 (Archived)</option>
+            </select>
+          </div>
+
+          {/* Active Class Selector */}
+          <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase">Class:</span>
+            <select
+              className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer min-w-[120px]"
+              value={activeClass?.id || ''}
+              onChange={(e) => setActiveClassId(e.target.value)}
+              disabled={busy}
+            >
+              {displayStreams.length === 0 ? (
+                <option value="">No streams in {selectedAcademicYearId}</option>
+              ) : (
+                displayStreams.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.programme})
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          {/* Term Selector */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs shadow-2xs">
             {(['T1', 'T2', 'T3'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setSelectedTermView(v)}
+                disabled={busy}
                 className={`px-2.5 py-1 font-bold rounded-md transition-all ${
                   selectedTermView === v
                     ? 'bg-red-800 text-white shadow-2xs'
@@ -300,8 +377,9 @@ export default function ReportsPage() {
             ))}
           </div>
 
+          {/* Mode Selector */}
           <select
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-600 focus:outline-none"
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-600 focus:outline-none shadow-2xs cursor-pointer"
             value={mode}
             onChange={(e) => setMode(e.target.value as ReportMode)}
             disabled={busy}

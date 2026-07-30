@@ -45,7 +45,7 @@
 
 @media print {
   @page {
-    margin: 1cm;
+    margin: 8mm;
     size: A4 portrait;
   }
 
@@ -58,6 +58,8 @@
 
   body {
     background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   main {
@@ -65,9 +67,41 @@
     padding: 0 !important;
   }
 
+  .eot-report,
+  .midterm-report {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .eot-report:last-child,
+  .midterm-report:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .transcript-doc {
+    width: 210mm !important;
+    max-width: 100% !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    page-break-inside: auto;
+  }
+
   .term-block {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  table {
+    page-break-inside: auto;
   }
 
   thead {
@@ -77,9 +111,11 @@
   tbody tr {
     break-inside: avoid;
     page-break-inside: avoid;
+    height: auto !important;
   }
 
   td {
-    border-top: 1px solid transparent;
+    overflow: visible !important;
+    word-break: break-word !important;
   }
 }

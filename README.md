@@ -16,15 +16,9 @@ React + Vite web port of the **St. Adelaide International Schools (SAIS)** HecTe
 | Active System Pointer (2026/2027 Term 1) & 13 Class Stream Provisioning | Done |
 | Academic Year Archiving (2021–2026) with RBAC Read-Only Locks & HT Override | Done |
 | Historical CSV Ingestion Pipeline & Alumni Stub Auto-Registration (`SAIS-STU-0309+`) | Done |
-| Teacher workspace (settings, subject grids, master sheet, contacts, health) | Done |
-| EOT + Midterm report cards + PDF batch (`html2canvas` + `jspdf`) | Done |
-| Gemini AI (subject, general+traits, tools, chatbot) via Express proxy | Done |
-| Email + WhatsApp delivery (Meta multipart upload + retries; ZIP class pack) | Done |
-| Lifelong student keys + enrollments + year-safe term keys | Done |
-| Student transcripts (search → key → print) for HT / teacher / student | Done |
-| Async `DatabaseRepository` + localStorage adapter (Firestore-shaped) | Done |
-| HT form/subject teacher reassignment + enrollment cascade | Done |
-| Firebase Auth / Firestore (Staff Only RBAC) | Done |
+| Headteacher workspace (settings, subject grids, master sheet, contacts, health, audit & remediation) | Done |
+| Firebase Auth / Firestore (Staff Only RBAC & Secondary Auth error aborting) | Done |
+| Real-Time Persistence Error Catching & Workload Math Pre-indexing | Done |
 | Automated Delivery (WhatsApp + Email) | Done |
 | Soft-delete, CSV import | Not started |
 

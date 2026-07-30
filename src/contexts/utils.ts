@@ -111,11 +111,15 @@ export function mintStudentKey(
   yearJoined: number,
   keySeq: Record<string, number>
 ): { studentKey: string; seq: Record<string, number> } {
-  const year = String(yearJoined);
-  const next = (keySeq[year] ?? 0) + 1;
+  const currentGlobal = Math.max(
+    keySeq['global'] ?? 0,
+    ...Object.values(keySeq).map((v) => (typeof v === 'number' ? v : 0))
+  );
+  const next = currentGlobal + 1;
+  const yearStr = String(yearJoined);
   return {
-    studentKey: formatStudentKey(yearJoined, next),
-    seq: { ...keySeq, [year]: next },
+    studentKey: formatStudentKey(next),
+    seq: { ...keySeq, global: next, [yearStr]: (keySeq[yearStr] ?? 0) + 1 },
   };
 }
 
@@ -349,9 +353,7 @@ export function applyLegacyMigration(snap: SaisSnapshot): SaisSnapshot {
       studentId: cleanStudentId,
     };
     const key = `${cleanStudentId}|${cleanScore.subjectCode}|${cleanScore.mode}|${cleanScore.termKey}`;
-    if (!scoreMap.has(key)) {
-      scoreMap.set(key, cleanScore);
-    }
+    scoreMap.set(key, cleanScore);
   }
   const scores = Array.from(scoreMap.values());
 
@@ -373,9 +375,7 @@ export function applyLegacyMigration(snap: SaisSnapshot): SaisSnapshot {
       studentId: cleanStudentId,
     };
     const key = `${cleanStudentId}|${cleanSum.academicYear}|${cleanSum.termKey}|${cleanSum.mode}`;
-    if (!summaryMap.has(key)) {
-      summaryMap.set(key, cleanSum);
-    }
+    summaryMap.set(key, cleanSum);
   }
   const summaries = Array.from(summaryMap.values());
 

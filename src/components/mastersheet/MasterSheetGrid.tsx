@@ -148,7 +148,7 @@ export function MasterSheetGrid({
         <thead>
           <tr className="bg-red-900 text-white font-bold font-display uppercase tracking-wider text-center text-xs select-none sticky top-0 z-30 shadow-2xs">
             <th
-              colSpan={isAnnual ? 3 : 4}
+              colSpan={3}
               className="py-2.5 px-3 border-r border-red-950/40 text-center sticky left-0 z-30 bg-red-950"
             >
               STUDENT IDENTIFIERS ({classStudents.length} Students)
@@ -185,14 +185,9 @@ export function MasterSheetGrid({
             <th className="sticky left-14 z-30 bg-slate-100 text-left px-2 py-2 border-r border-b border-slate-300 w-32">
               Student ID
             </th>
-            <th className={`sticky left-[184px] z-30 bg-slate-100 text-left px-3 py-2 border-b border-slate-300 w-52 min-w-[208px] ${isAnnual ? 'border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]' : 'border-r'}`}>
+            <th className="sticky left-[184px] z-30 bg-slate-100 text-left px-3 py-2 border-b border-slate-300 w-52 min-w-[208px] border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
               Student Name
             </th>
-            {!isAnnual && (
-              <th className="sticky left-[392px] z-30 bg-slate-100 text-left px-3 py-2 border-r-2 border-b border-slate-300 w-36 min-w-[144px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
-                Assigned Club
-              </th>
-            )}
 
             {isAnnual ? (
               <>
@@ -341,17 +336,11 @@ export function MasterSheetGrid({
 
                 <td
                   onClick={() => navigate(`/transcripts?studentKey=${st.studentKey || st.id}`)}
-                  className={`px-3 py-2 font-semibold text-slate-900 whitespace-nowrap align-middle sticky left-[184px] z-20 bg-white group-focus-within/row:bg-red-50/60 border-b border-slate-300 w-52 transition-colors cursor-pointer hover:underline hover:text-red-700 ${isAnnual ? 'border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]' : 'border-r'}`}
+                  className="px-3 py-2 font-semibold text-slate-900 whitespace-nowrap align-middle sticky left-[184px] z-20 bg-white group-focus-within/row:bg-red-50/60 border-b border-slate-300 w-52 transition-colors cursor-pointer hover:underline hover:text-red-700 border-r-2 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]"
                   title="Click to view full student transcript"
                 >
                   {st.name}
                 </td>
-
-                {!isAnnual && (
-                  <td className="px-3 py-2 font-semibold text-red-900 bg-red-50/40 whitespace-nowrap align-middle sticky left-[392px] z-20 group-focus-within/row:bg-red-100/60 border-r-2 border-b border-slate-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] w-36 transition-colors">
-                    {assignedClub}
-                  </td>
-                )}
 
                 {isAnnual ? (
                   <>

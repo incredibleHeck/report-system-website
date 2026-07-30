@@ -15,7 +15,7 @@ export interface AcademicYearState {
 }
 
 export function useAcademicYearLogic(state: AcademicYearState) {
-  const { schools, setSchools, users, setUsers, systemSettings, selectedAcademicYearId, setSelectedAcademicYearId } = state;
+  const { schools, setSchools, users, setUsers, systemSettings, setSystemSettings, selectedAcademicYearId, setSelectedAcademicYearId } = state;
 
   const registerSchool = (school: Omit<School, 'id'>) => {
     const id = createId();
@@ -37,6 +37,25 @@ export function useAcademicYearLogic(state: AcademicYearState) {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
   };
 
+  const updateSystemSettings = (patch: Partial<any>) => {
+    state.setSystemSettings((prev: any) => ({ ...(prev || {}), ...patch }));
+  };
+
+  const toggleTermLock = (yearKey: string, termCode: string) => {
+    const normKey = (yearKey || '').replace('/', '-').trim();
+    const key = `${normKey}_${termCode}`;
+    state.setSystemSettings((prev: any) => {
+      const currentLocked = prev?.lockedTerms || {};
+      return {
+        ...(prev || {}),
+        lockedTerms: {
+          ...currentLocked,
+          [key]: !currentLocked[key],
+        },
+      };
+    });
+  };
+
   const createAcademicYear = (year: string, status: 'active' | 'upcoming' = 'upcoming') =>
     createAcademicYearWith3Terms(year, status);
 
@@ -50,6 +69,8 @@ export function useAcademicYearLogic(state: AcademicYearState) {
     updateSchool,
     addTeacher,
     updateUser,
+    updateSystemSettings,
+    toggleTermLock,
     createAcademicYear,
   };
 }

@@ -1,9 +1,6 @@
-import html2canvas from 'html2canvas';
+import { toCanvas } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
-/** A4 landscape in mm */
-const PAGE_W = 297;
-const PAGE_H = 210;
 const MARGIN = 6;
 
 async function waitForImages(element: HTMLElement) {
@@ -25,20 +22,26 @@ async function waitForImages(element: HTMLElement) {
 }
 
 /**
- * Render report HTML to A4 landscape PDF.
- * Fits on 1 page when possible; splits across at most 2 pages if taller.
+ * Render HTML to A4 PDF.
+ * Fits on 1 page when possible; splits across pages if taller.
  */
-export async function elementToPdfBase64(element: HTMLElement, fileName: string) {
+export async function elementToPdfBase64(
+  element: HTMLElement, 
+  fileName: string,
+  opts?: { orientation?: 'portrait' | 'landscape' }
+) {
+  const orientation = opts?.orientation || 'landscape';
+  const PAGE_W = orientation === 'landscape' ? 297 : 210;
+  const PAGE_H = orientation === 'landscape' ? 210 : 297;
+
   await waitForImages(element);
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
+  const canvas = await toCanvas(element, {
+    pixelRatio: 2,
     backgroundColor: '#ffffff',
   });
 
   const pdf = new jsPDF({
-    orientation: 'landscape',
+    orientation: orientation,
     unit: 'mm',
     format: 'a4',
   });
@@ -62,16 +65,61 @@ export async function elementToPdfBase64(element: HTMLElement, fileName: string)
       scaledFullH
     );
   } else {
-    // Cap at 2 pages: slice the source canvas into two vertical bands
-    const maxScaledH = usableH * 2;
-    const drawScale = scaledFullH > maxScaledH ? maxScaledH / canvas.height : scale;
-    const pageSlicePx = Math.floor(usableH / drawScale);
+    // Spans across multiple pages dynamically
+    const defaultSlicePx = Math.floor(usableH / scale);
 
-    for (let page = 0; page < 2; page++) {
-      const srcY = page * pageSlicePx;
-      if (srcY >= canvas.height) break;
+    const rootRect = element.getBoundingClientRect();
+    const breakableElements = Array.from(element.querySelectorAll('tr, .avoid-break'));
+    const breakBounds = breakableElements.map((el) => {
+      const avoidParent = (el.closest('.avoid-break') as HTMLElement) || null;
+      const rect = el.getBoundingClientRect();
+      return {
+        el,
+        avoidParent,
+        top: (rect.top - rootRect.top) * 2,
+        bottom: (rect.bottom - rootRect.top) * 2,
+      };
+    });
 
-      const sliceH = Math.min(pageSlicePx, canvas.height - srcY);
+    let currentY = 0;
+    let pageCount = 0;
+
+    while (currentY < canvas.height && pageCount < 10) {
+      let sliceH = Math.min(defaultSlicePx, canvas.height - currentY);
+      let breakY = currentY + sliceH;
+
+      if (breakY < canvas.height) {
+        for (let i = breakBounds.length - 1; i >= 0; i--) {
+          const rb = breakBounds[i];
+          let top = rb.top;
+          let bottom = rb.bottom;
+
+          if (rb.avoidParent) {
+            const pRect = rb.avoidParent.getBoundingClientRect();
+            const pTop = (pRect.top - rootRect.top) * 2;
+            const pBottom = (pRect.bottom - rootRect.top) * 2;
+            if (pTop > currentY) {
+              top = pTop;
+              bottom = pBottom;
+            }
+          }
+
+          // If the element (or its container) crosses the break boundary
+          if (top > currentY && top < breakY && bottom > breakY) {
+            // Provide a 10px (scaled) safety margin above the element to avoid clipping borders
+            breakY = Math.max(currentY + 1, top - 10);
+            sliceH = breakY - currentY;
+            break;
+          }
+        }
+      }
+
+      // Fallback if an element is taller than a whole page
+      if (sliceH <= 0) {
+        sliceH = Math.min(defaultSlicePx, canvas.height - currentY);
+        breakY = currentY + sliceH;
+      }
+
       const sliceCanvas = document.createElement('canvas');
       sliceCanvas.width = canvas.width;
       sliceCanvas.height = sliceH;
@@ -82,7 +130,7 @@ export async function elementToPdfBase64(element: HTMLElement, fileName: string)
       ctx.drawImage(
         canvas,
         0,
-        srcY,
+        currentY,
         canvas.width,
         sliceH,
         0,
@@ -91,8 +139,8 @@ export async function elementToPdfBase64(element: HTMLElement, fileName: string)
         sliceH
       );
 
-      if (page > 0) pdf.addPage('a4', 'landscape');
-      const drawH = sliceH * drawScale;
+      if (pageCount > 0) pdf.addPage('a4', orientation);
+      const drawH = sliceH * scale;
       pdf.addImage(
         sliceCanvas.toDataURL('image/jpeg', 0.93),
         'JPEG',
@@ -101,6 +149,9 @@ export async function elementToPdfBase64(element: HTMLElement, fileName: string)
         usableW,
         drawH
       );
+
+      currentY = breakY;
+      pageCount++;
     }
   }
 

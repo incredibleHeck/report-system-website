@@ -62,6 +62,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/headteacher/:tab"
+            element={
+              <ProtectedRoute allowedRole="headteacher">
+                <HeadteacherDashboard />
+              </ProtectedRoute>
+            }
+          />
 
           <Route path="/teacher">
             <Route
@@ -168,6 +176,9 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Route aliases for seamless navigation */}
+            <Route path="master-sheet" element={<Navigate to="/teacher/master" replace />} />
+            <Route path="ai-suite" element={<Navigate to="/teacher/ai/subject" replace />} />
           </Route>
         </Route>
       </Routes>

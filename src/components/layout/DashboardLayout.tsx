@@ -19,11 +19,13 @@ import {
   Shield,
   PanelLeft,
   PanelLeftClose,
+  BarChart3,
+  UserCheck,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '../../lib/utils';
 import { useUndo } from '../../context/UndoContext';
-import { useDatabase } from '../../context/DatabaseContext';
+import { useDatabase, useActiveClass, getStreamYearId, normalizeYearId } from '../../context/DatabaseContext';
 
 export default function DashboardLayout() {
   const { currentUser, logout } = useAuth();
@@ -31,8 +33,23 @@ export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { canUndo, pop } = useUndo();
-  const { replaceScores, replaceSummaries, selectedAcademicYearId, systemSettings } = useDatabase();
+  const { replaceScores, replaceSummaries, classes, systemSettings } = useDatabase();
+  const { activeClass, selectedAcademicYearId, setSelectedAcademicYearId, setActiveClassId } = useActiveClass();
   const location = useLocation();
+
+  const userClasses = (classes || []).filter((c: any) => {
+    if (!currentUser?.id) return true;
+    if (currentUser?.role === 'headteacher') return true;
+    return (
+      c.teacherId === currentUser.id ||
+      c.formTeacherId === currentUser.id ||
+      c.subjectTeachers?.some((st: any) => st.teacherId === currentUser.id)
+    );
+  });
+
+  const headerDisplayStreams = userClasses.filter(
+    (cs: any) => normalizeYearId(getStreamYearId(cs)) === normalizeYearId(selectedAcademicYearId)
+  );
 
   const isGradeEntryPage =
     location.pathname === '/teacher/master' ||
@@ -77,8 +94,14 @@ export default function DashboardLayout() {
   ];
 
   const headteacherLinks = [
-    { name: 'Dashboard', to: '/headteacher', icon: LayoutDashboard },
-    { name: 'Transcripts', to: '/headteacher/transcripts', icon: ScrollText },
+    { name: 'Executive Overview', to: '/headteacher', icon: LayoutDashboard },
+    { name: 'Grade Approvals', to: '/headteacher/approvals', icon: BarChart3 },
+    { name: 'Staff Management', to: '/headteacher/teachers', icon: UserCheck },
+    { name: 'Class Streams', to: '/headteacher/classes', icon: BookOpen },
+    { name: 'Student Registry', to: '/headteacher/students', icon: Users },
+    { name: 'Academic Years', to: '/headteacher/years', icon: ClipboardList },
+    { name: 'Transcripts Explorer', to: '/headteacher/transcripts', icon: ScrollText },
+    { name: 'School Settings', to: '/headteacher/settings', icon: Settings },
   ];
 
   const studentLinks = [
@@ -99,7 +122,7 @@ export default function DashboardLayout() {
         : studentLinks;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50 print:h-auto print:overflow-visible print:block">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs md:hidden"
@@ -110,7 +133,7 @@ export default function DashboardLayout() {
       {/* Sidebar Container */}
       <div
         className={cn(
-          'fixed inset-y-0 left-0 z-50 transform bg-slate-900 text-white transition-all duration-300 ease-in-out md:static md:translate-x-0 flex flex-col shadow-xl select-none',
+          'fixed inset-y-0 left-0 z-50 transform bg-slate-900 text-white transition-all duration-300 ease-in-out md:static md:translate-x-0 flex flex-col shadow-xl select-none print:hidden',
           isCollapsed ? 'md:w-16 w-64' : 'w-64',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
@@ -249,9 +272,9 @@ export default function DashboardLayout() {
       </div>
 
       {/* Main Workspace */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0 print:overflow-visible print:h-auto print:block">
         {/* Desktop Top Header with Focus Mode Toggle */}
-        <header className="hidden md:flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6">
+        <header className="hidden md:flex h-14 items-center justify-between border-b border-slate-200 bg-white px-6 print:hidden">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsCollapsed((prev) => !prev)}
@@ -277,10 +300,44 @@ export default function DashboardLayout() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
-            <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-800 font-bold shadow-2xs">
-              {systemSettings?.currentTermYearInfo ? `Active: ${systemSettings.currentTermYearInfo}` : `Academic Year: ${selectedAcademicYearId || '2026-2027'} | Term: Term 1`}
-            </span>
+          <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-600">
+            {/* Academic Year Selector */}
+            <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Year:</span>
+              <select
+                className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+                value={selectedAcademicYearId || '2026/2027'}
+                onChange={(e) => setSelectedAcademicYearId(e.target.value)}
+              >
+                <option value="2026/2027">2026/2027 (Active Pointer)</option>
+                <option value="2025/2026">2025/2026 (Archived)</option>
+                <option value="2024/2025">2024/2025 (Archived)</option>
+                <option value="2023/2024">2023/2024 (Archived)</option>
+                <option value="2022/2023">2022/2023 (Archived)</option>
+                <option value="2021/2022">2021/2022 (Archived)</option>
+              </select>
+            </div>
+
+            {/* Active Class Selector */}
+            <div className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs">
+              <span className="text-[11px] font-bold text-slate-500 uppercase">Class:</span>
+              <select
+                className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer max-w-[150px] truncate"
+                value={activeClass?.id || ''}
+                onChange={(e) => setActiveClassId(e.target.value)}
+              >
+                {headerDisplayStreams.length === 0 ? (
+                  <option value="">No streams</option>
+                ) : (
+                  headerDisplayStreams.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
             <span>{currentUser.name}</span>
             <span className="text-slate-300">•</span>
             <span className="capitalize text-red-800 font-bold">{currentUser.role}</span>
@@ -288,7 +345,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Mobile Header */}
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
+        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden print:hidden">
           <div className="flex items-center gap-2">
             <img src="/sais-logo.png" alt="" className="h-8 w-8 object-contain" />
             <span className="text-sm font-bold text-red-800 font-display">SAIS HecTech</span>
@@ -299,7 +356,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 print:overflow-visible print:h-auto print:block">
           <div className="mx-auto max-w-[1600px]">
             <Outlet />
           </div>

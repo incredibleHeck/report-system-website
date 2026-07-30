@@ -6,6 +6,9 @@ export interface User {
   id: string;
   name: string;
   email?: string;
+  phone?: string;
+  password?: string;
+  status?: 'active' | 'inactive';
   role: 'headteacher' | 'teacher';
   schoolId: string;
   subjects?: string[];

@@ -1,14 +1,17 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { BookOpen, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useActiveClass, useDatabase, normalizeYearId, getStreamYearId } from '../../context/DatabaseContext';
 import { getSubjectsForTerm } from '../../lib/programmeSchemas';
 import { normalizeGender } from '../../lib/gender';
 import { termsFromJoin } from '../../lib/academicYear';
 import Modal from '../../components/ui/Modal';
+import BulkStudentImportModal from '../../components/registry/BulkStudentImportModal';
 import type { TermCode } from '../../types';
 
 export default function TeacherDashboard() {
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const { currentUser } = useAuth();
   const {
     addStudent,
@@ -234,20 +237,33 @@ export default function TeacherDashboard() {
             </div>
           </div>
 
-          <section className="@container">
-            <h2 className="font-bold text-sais-black mb-4 text-lg font-display">Subjects</h2>
-            <div className="grid @[380px]:grid-cols-2 @[640px]:grid-cols-3 gap-4">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-sais-black text-base font-display flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-red-800" />
+                Subjects ({subjects.length})
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {subjects.map((sub) => (
                 <Link
                   key={sub.code}
                   to={`/teacher/subjects/${sub.code}`}
-                  className="rounded-2xl border border-slate-200 bg-white p-6 hover:border-sais-red/60 hover:shadow-md active:scale-[0.99] transition-all duration-200 flex flex-col justify-between space-y-3 group"
+                  className="rounded-xl border border-slate-200 bg-white p-3.5 hover:border-red-600 hover:shadow-md active:scale-[0.98] transition-all duration-200 flex flex-col justify-between space-y-2 group"
                 >
-                  <p className="font-bold text-sais-black group-hover:text-sais-red transition-colors">{sub.name}</p>
-                  <div>
-                    <span className="inline-block text-[11px] font-mono font-medium text-sais-muted uppercase tracking-wider bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200/50">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] font-mono font-bold text-red-900 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                      {sub.code}
+                    </span>
+                    <span className="text-[10px] font-medium text-slate-500 uppercase tracking-tight bg-slate-100 px-1.5 py-0.5 rounded">
                       {sub.kind}
                     </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="font-bold text-slate-800 text-xs group-hover:text-red-800 transition-colors line-clamp-1">
+                      {sub.name}
+                    </p>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-red-700 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                   </div>
                 </Link>
               ))}
@@ -279,6 +295,13 @@ export default function TeacherDashboard() {
                   onClick={() => setMode('existing')}
                 >
                   Enroll existing
+                </button>
+                <button
+                  type="button"
+                  className="px-3.5 py-1.5 rounded-xl font-semibold bg-slate-800 text-white hover:bg-black transition-all duration-150 active:scale-[0.98] shadow-xs"
+                  onClick={() => setIsBulkImportOpen(true)}
+                >
+                  Bulk CSV Import
                 </button>
               </div>
             </div>
@@ -445,6 +468,13 @@ export default function TeacherDashboard() {
           </div>
         </form>
       </Modal>
+
+      {/* Bulk CSV Import Modal */}
+      <BulkStudentImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        targetClassId={activeClass?.id}
+      />
     </div>
   );
 }

@@ -9,6 +9,9 @@ export interface School {
   website?: string;
   email?: string;
   tel?: string;
+  motto?: string;
+  logoUrl?: string;
+  principalSignature?: string;
   headteacherId: string;
 }
 

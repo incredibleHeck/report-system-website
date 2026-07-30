@@ -130,6 +130,7 @@ export interface ReportSummary {
   className: string;
   programme: Programme;
   finalized: boolean;
+  isFinalized?: boolean;
   subjectLines: SubjectLineSnapshot[] | null;
 }
 

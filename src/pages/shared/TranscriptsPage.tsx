@@ -10,6 +10,7 @@ import {
   type TranscriptDocumentModel,
   type TranscriptSearchHit,
 } from '../../lib/transcript';
+import { elementToPdfBase64, downloadBlob } from '../../lib/pdf';
 
 type Props = {
   /** When set, ignore search/URL and build from this key only (student portal). */
@@ -21,10 +22,10 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
   const [searchParams] = useSearchParams();
   const urlKey = searchParams.get('studentKey');
 
-  const { lifelongStudents, enrollments, summaries, schools } = useDatabase();
+  const { lifelongStudents, enrollments, summaries, scores, schools, systemSettings } = useDatabase();
   const source = useMemo(
-    () => ({ lifelongStudents, enrollments, summaries }),
-    [lifelongStudents, enrollments, summaries]
+    () => ({ lifelongStudents, enrollments, summaries, scores }),
+    [lifelongStudents, enrollments, summaries, scores]
   );
 
   const [query, setQuery] = useState('');
@@ -33,6 +34,7 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
   const [model, setModel] = useState<TranscriptDocumentModel | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const schoolName = schools[0]?.name;
 
@@ -58,6 +60,16 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
       cancelled = true;
     };
   }, [sessionStudentKey, urlKey, source]);
+
+  useEffect(() => {
+    if (model?.student) {
+      const oldTitle = document.title;
+      document.title = `Transcript - ${model.student.name} - ${model.student.studentKey}`;
+      return () => {
+        document.title = oldTitle;
+      };
+    }
+  }, [model]);
 
   const runSearch = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -97,6 +109,24 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
     setLoading(false);
   };
 
+  const downloadTranscript = async () => {
+    if (!model?.student) return;
+    setDownloading(true);
+    try {
+      const el = document.getElementById('transcript-pdf-root');
+      if (!el) throw new Error('Document root not found');
+      
+      const fileName = `Transcript - ${model.student.name} - ${model.student.studentKey}.pdf`;
+      const result = await elementToPdfBase64(el, fileName, { orientation: 'portrait' });
+      downloadBlob(result.blob, fileName);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to generate PDF.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3 no-print">
@@ -113,10 +143,11 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
         {model && (
           <button
             type="button"
-            onClick={() => window.print()}
-            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm hover:bg-sais-red-dark"
+            onClick={downloadTranscript}
+            disabled={downloading}
+            className="rounded-lg bg-sais-red text-sais-white px-4 py-2 text-sm hover:bg-sais-red-dark disabled:opacity-50"
           >
-            Print transcript
+            {downloading ? 'Generating PDF...' : 'Download transcript'}
           </button>
         )}
       </div>
@@ -184,13 +215,18 @@ export default function TranscriptsPage({ sessionStudentKey }: Props) {
       {model && (
         <>
           <div className="rounded-lg border border-sais-brown/30 bg-sais-brown-soft px-4 py-3 text-sm text-sais-ink no-print PrintInstructions">
-            For a clean PDF: Print Settings → More settings → Margins <strong>None</strong> →
-            Uncheck <strong>Headers and footers</strong>.
+            To print a physical copy, open the downloaded PDF file and print it from your PDF viewer.
           </div>
           {selectedKey && (
             <p className="text-xs text-slate-500 no-print font-mono">{selectedKey}</p>
           )}
-          <TranscriptDocument model={model} schoolName={schoolName} />
+          <div className="flex justify-center w-full">
+            <TranscriptDocument
+              model={model}
+              schoolName={schoolName}
+              principalSignature={schools[0]?.principalSignature || systemSettings?.principalSignature}
+            />
+          </div>
         </>
       )}
 
