@@ -50,8 +50,8 @@ export default function BulkStudentImportModal({
       const parts = line.split(/[,;\t]/).map((p) => p.trim());
       if (parts.length < 2) continue;
 
-      const rollNumber = parts[0].toUpperCase();
-      const name = parts[1].toUpperCase();
+      const rollNumber = parts[0].trim().replace(/\s+/g, ' ').toUpperCase();
+      const name = parts[1].trim().replace(/\s+/g, ' ').toUpperCase();
       let genderStr = (parts[2] || 'Male').toLowerCase();
       let gender: 'Male' | 'Female' | 'Unknown' = 'Male';
       if (genderStr.startsWith('f')) gender = 'Female';

@@ -75,6 +75,21 @@ async function idbSet<T>(key: string, val: T): Promise<void> {
   }
 }
 
+export async function clearLocalCache(): Promise<void> {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn('IDB clear error:', err);
+  }
+}
+
 export class FirestoreRepository implements DatabaseRepository {
   private inMemorySnapshot: Partial<SaisSnapshot> = {};
   private inMemoryMaps: Partial<Record<SnapshotCollection, Map<string, any>>> = {};
@@ -261,7 +276,9 @@ export class FirestoreRepository implements DatabaseRepository {
   }
 
   async clearAll(): Promise<void> {
-    console.warn('clearAll is not fully implemented in FirestoreRepository to prevent accidental data deletion.');
+    this.inMemorySnapshot = {};
+    this.inMemoryMaps = {};
+    await clearLocalCache();
   }
 
   async getLifelongStudents(): Promise<LifelongStudent[]> {

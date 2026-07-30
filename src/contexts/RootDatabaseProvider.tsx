@@ -110,17 +110,23 @@ export function RootDatabaseProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; unsubscribe(); };
   }, []);
 
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   function useSaveEffect<T>(collectionName: any, data: T, ready: boolean) {
     const isInitialRender = useRef(true);
     useEffect(() => {
       if (!ready) return;
       if (isInitialRender.current) { isInitialRender.current = false; return; }
-      activeRepository.saveCollection(collectionName, data).catch((err) => {
-        console.error(`Failed to save collection ${collectionName}:`, err);
-        window.alert(
-          'CRITICAL: Network sync failed. Your recent changes were not saved to the database. Please check your internet connection and refresh the page.'
-        );
-      });
+      activeRepository
+        .saveCollection(collectionName, data)
+        .then(() => setSyncError(null))
+        .catch((err) => {
+          console.error(`Failed to save collection ${collectionName}:`, err);
+          setSyncError(collectionName);
+          window.alert(
+            'CRITICAL: Network sync failed. Your recent changes were not saved to the database. Please check your internet connection and refresh the page.'
+          );
+        });
     }, [data, ready, collectionName]);
   }
 
@@ -208,7 +214,7 @@ export function RootDatabaseProvider({ children }: { children: ReactNode }) {
   };
 
   const compositeValue = {
-    dbReady, dbLoading,
+    dbReady, dbLoading, syncError,
     ...academicYearLogic,
     ...classStreamLogic,
     ...studentRegistryLogic,

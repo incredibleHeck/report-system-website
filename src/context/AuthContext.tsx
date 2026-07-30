@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { User } from '../types';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { clearLocalCache } from '../data/FirestoreRepository';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -82,15 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (user: User) => setCurrentUser(user);
   const logout = async () => {
+    try {
+      localStorage.removeItem(AUTH_KEY);
+      await clearLocalCache();
+    } catch (e) {
+      console.warn('Cache clear error on logout', e);
+    }
     if (import.meta.env.VITE_DATA_BACKEND === 'firestore') {
       try {
         await signOut(auth);
       } catch (e) {
         console.error('Sign out error', e);
       }
-    } else {
-      setCurrentUser(null);
     }
+    setCurrentUser(null);
   };
 
   if (authLoading) {

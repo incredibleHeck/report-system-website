@@ -144,22 +144,30 @@ export function buildSummaries(params: {
         totals.length > 0
           ? Number((rawScore / totals.length).toFixed(2))
           : 0;
-      const aveGrade = gradeFromTotal(averageScore).grade;
+      const aveGrade = gradeFromTotal(Math.round(averageScore)).grade;
 
       let bestMark = 0;
       let bestGrade = 'U';
       let leastMark = 100;
       let leastGrade = 'U';
+
       for (const s of subjectScores) {
         if (s.totalScore >= bestMark) {
           bestMark = s.totalScore;
           bestGrade = s.grade;
         }
+      }
+
+      const assessedScores = subjectScores.filter((s) => Number.isFinite(s.totalScore) && s.totalScore > 0);
+      const leastPool = assessedScores.length > 0 ? assessedScores : subjectScores;
+
+      for (const s of leastPool) {
         if (s.totalScore <= leastMark) {
           leastMark = s.totalScore;
           leastGrade = s.grade;
         }
       }
+
       if (subjectScores.length === 0) {
         leastMark = 0;
       }

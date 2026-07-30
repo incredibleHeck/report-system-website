@@ -14,6 +14,15 @@ export interface AcademicYearState {
   setSelectedAcademicYearId: React.Dispatch<React.SetStateAction<string>>;
 }
 
+const getCurrentUser = () => {
+  try {
+    const raw = localStorage.getItem('sais_auth_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export function useAcademicYearLogic(state: AcademicYearState) {
   const { schools, setSchools, users, setUsers, systemSettings, setSystemSettings, selectedAcademicYearId, setSelectedAcademicYearId } = state;
 
@@ -38,10 +47,20 @@ export function useAcademicYearLogic(state: AcademicYearState) {
   };
 
   const updateSystemSettings = (patch: Partial<any>) => {
+    const user = getCurrentUser();
+    if (user && user.role !== 'headteacher') {
+      console.warn('Security Block: Non-headteacher attempted to modify system settings.');
+      return;
+    }
     state.setSystemSettings((prev: any) => ({ ...(prev || {}), ...patch }));
   };
 
   const toggleTermLock = (yearKey: string, termCode: string) => {
+    const user = getCurrentUser();
+    if (user && user.role !== 'headteacher') {
+      console.warn('Security Block: Non-headteacher attempted to toggle term lock.');
+      return;
+    }
     const normKey = (yearKey || '').replace('/', '-').trim();
     const key = `${normKey}_${termCode}`;
     state.setSystemSettings((prev: any) => {

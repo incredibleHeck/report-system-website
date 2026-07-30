@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, ChevronRight, Zap, UserPlus, Search, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -74,6 +74,35 @@ export default function TeacherDashboard() {
   const [joinTerm, setJoinTerm] = useState<TermCode>('T1');
   const [error, setError] = useState('');
 
+  // Autocomplete Search Popover State & Refs
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+  // Outside-click detection for popover dismissal
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsPopoverOpen(false);
+        setHighlightedIndex(-1);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  // Scroll highlighted item into view when navigating via arrow keys
+  useEffect(() => {
+    if (isPopoverOpen && highlightedIndex >= 0 && optionRefs.current[highlightedIndex]) {
+      optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightedIndex, isPopoverOpen]);
+
   // Promote / Roster Import Modal State
   const [promoteSourceClassId, setPromoteSourceClassId] = useState('');
   const [selectedPromoteKeys, setSelectedPromoteKeys] = useState<string[]>([]);
@@ -90,15 +119,26 @@ export default function TeacherDashboard() {
     return String(maxIndex + 1).padStart(3, '0');
   };
 
-  // Derive unenrolled students for quick selection in Enroll Existing
+  // Derive unenrolled students for quick selection in Enroll Existing (Optimized O(N) map lookups)
   const allUnenrolledStudents = useMemo(() => {
     if (!activeClass || !lifelongStudents) return [];
     const currentlyEnrolledKeys = new Set(classStudents.map((s) => s.studentKey || s.id));
+    const classMap = new Map<string, string>((classes || []).map((c: any) => [c.id, c.name]));
+
+    const prevClassMap = new Map<string, string>();
+    for (const en of (enrollments || [])) {
+      if (en.classId !== activeClass.id && !prevClassMap.has(en.studentKey)) {
+        const className = classMap.get(en.classId);
+        if (className) {
+          prevClassMap.set(en.studentKey, className);
+        }
+      }
+    }
+
     return (lifelongStudents || [])
       .filter((l: any) => !currentlyEnrolledKeys.has(l.studentKey) && !currentlyEnrolledKeys.has(l.id))
       .map((l: any) => {
-        const prevEnr = (enrollments || []).find((e: any) => e.studentKey === l.studentKey && e.classId !== activeClass.id);
-        const prevClass = prevEnr ? classes.find((c: any) => c.id === prevEnr.classId)?.name : null;
+        const prevClass = prevClassMap.get(l.studentKey);
         return {
           ...l,
           prevClassLabel: prevClass ? ` (Prev: ${prevClass})` : '',
@@ -114,8 +154,8 @@ export default function TeacherDashboard() {
     return allUnenrolledStudents
       .filter(
         (st: any) =>
-          st.name.toLowerCase().includes(q) ||
-          st.studentKey.toLowerCase().includes(q)
+          (st.name || '').toLowerCase().includes(q) ||
+          (st.studentKey || '').toLowerCase().includes(q)
       )
       .slice(0, 8);
   }, [allUnenrolledStudents, existingSearchQuery]);
@@ -172,8 +212,38 @@ export default function TeacherDashboard() {
     setSelectedStudentToEnroll(st);
     setExistingKey(st.studentKey);
     setExistingSearchQuery(`${st.name} (${st.studentKey})`);
+    setIsPopoverOpen(false);
+    setHighlightedIndex(-1);
     if (!studentId) {
       setStudentId(`STU-${computeNextIndex()}`);
+    }
+  };
+
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!isPopoverOpen || matchingEnrollCandidates.length === 0) {
+      if (e.key === 'ArrowDown' && matchingEnrollCandidates.length > 0) {
+        e.preventDefault();
+        setIsPopoverOpen(true);
+        setHighlightedIndex(0);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev < matchingEnrollCandidates.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : matchingEnrollCandidates.length - 1));
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < matchingEnrollCandidates.length) {
+        e.preventDefault();
+        selectStudentForEnrollment(matchingEnrollCandidates[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsPopoverOpen(false);
+      setHighlightedIndex(-1);
     }
   };
 
@@ -271,44 +341,9 @@ export default function TeacherDashboard() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <label className="block text-xs text-sais-muted mb-1 font-medium">Academic Year</label>
-            <select
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs transition-all cursor-pointer"
-              value={selectedAcademicYearId}
-              onChange={(e) => handleYearChange(e.target.value)}
-            >
-              <option value="2026/2027">2026/2027 (Active Pointer)</option>
-              <option value="2025/2026">2025/2026 (Archived)</option>
-              <option value="2024/2025">2024/2025 (Archived)</option>
-              <option value="2023/2024">2023/2024 (Archived)</option>
-              <option value="2022/2023">2022/2023 (Archived)</option>
-              <option value="2021/2022">2021/2022 (Archived)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-sais-muted mb-1 font-medium">Active Class</label>
-            <select
-              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red focus-visible:border-sais-red shadow-xs transition-all min-w-[180px]"
-              value={activeClass?.id || ''}
-              onChange={(e) => setActiveClassId(e.target.value)}
-            >
-              {displayStreams.length === 0 ? (
-                <option value="">No streams in {selectedAcademicYearId}</option>
-              ) : (
-                displayStreams.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.programme})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          <div>
             <label className="block text-xs text-sais-muted mb-1 font-medium">Term</label>
             <select
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs transition-all"
+              className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-sais-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-xs transition-all cursor-pointer"
               value={selectedTerm}
               onChange={(e) => handleTermChange(e.target.value)}
             >
@@ -494,44 +529,94 @@ export default function TeacherDashboard() {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {/* Live Search & Autocomplete Input */}
-                  <div className="md:col-span-2 relative space-y-1.5">
-                    <label className="block text-xs font-medium text-slate-700">Search Student (Name or Lifelong Key):</label>
+                  <div className="md:col-span-2 relative space-y-1.5" ref={searchContainerRef}>
+                    <label htmlFor="enrollment-search-input" className="block text-xs font-medium text-slate-700">
+                      Search Student (Name or Lifelong Key):
+                    </label>
                     <div className="relative">
                       <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
                       <input
+                        id="enrollment-search-input"
+                        role="combobox"
+                        aria-expanded={isPopoverOpen && existingSearchQuery.trim() !== ''}
+                        aria-haspopup="listbox"
+                        aria-autocomplete="list"
+                        aria-controls="enrollment-autocomplete-listbox"
+                        aria-activedescendant={
+                          highlightedIndex >= 0 && matchingEnrollCandidates[highlightedIndex]
+                            ? `autocomplete-option-${matchingEnrollCandidates[highlightedIndex].studentKey}`
+                            : undefined
+                        }
                         className="w-full rounded-xl border border-slate-300 bg-white pl-9 pr-3.5 py-2.5 text-xs font-semibold text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sais-red shadow-2xs"
                         placeholder="Type student name or key (e.g. Ama, SAIS-2023-0042)..."
                         value={existingSearchQuery}
                         onChange={(e) => {
-                          setExistingSearchQuery(e.target.value);
-                          setExistingKey(e.target.value);
+                          const val = e.target.value;
+                          setExistingSearchQuery(val);
+                          setExistingKey(val);
+                          setIsPopoverOpen(true);
+                          setHighlightedIndex(-1);
                           if (selectedStudentToEnroll) setSelectedStudentToEnroll(null);
                         }}
+                        onFocus={() => {
+                          if (existingSearchQuery.trim()) {
+                            setIsPopoverOpen(true);
+                          }
+                        }}
+                        onKeyDown={handleSearchKeyDown}
                       />
                     </div>
 
                     {/* Live Autocomplete Suggestions Popover */}
-                    {matchingEnrollCandidates.length > 0 && (
-                      <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto divide-y divide-slate-100">
-                        {matchingEnrollCandidates.map((st: any) => (
-                          <button
-                            key={st.studentKey}
-                            type="button"
-                            className="w-full text-left p-2.5 hover:bg-red-50/70 flex items-center justify-between transition-colors text-xs"
-                            onClick={() => selectStudentForEnrollment(st)}
-                          >
-                            <div>
-                              <p className="font-bold text-slate-900">{st.name}</p>
-                              <p className="text-[11px] font-mono text-slate-500">
-                                Key: <span className="font-semibold text-red-900">{st.studentKey}</span>
-                                {st.prevClassLabel}
-                              </p>
-                            </div>
-                            <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
-                              Select
-                            </span>
-                          </button>
-                        ))}
+                    {isPopoverOpen && existingSearchQuery.trim() !== '' && (
+                      <div
+                        id="enrollment-autocomplete-listbox"
+                        role="listbox"
+                        className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto divide-y divide-slate-100"
+                      >
+                        {matchingEnrollCandidates.length > 0 ? (
+                          matchingEnrollCandidates.map((st: any, idx: number) => {
+                            const isHighlighted = idx === highlightedIndex;
+                            return (
+                              <button
+                                key={st.studentKey}
+                                id={`autocomplete-option-${st.studentKey}`}
+                                ref={(el) => {
+                                  optionRefs.current[idx] = el;
+                                }}
+                                type="button"
+                                role="option"
+                                aria-selected={isHighlighted}
+                                className={`w-full text-left p-2.5 flex items-center justify-between transition-colors text-xs ${
+                                  isHighlighted
+                                    ? 'bg-red-100/90 text-red-900 ring-1 ring-inset ring-sais-red/30'
+                                    : 'hover:bg-red-50/70 text-slate-900'
+                                }`}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => selectStudentForEnrollment(st)}
+                              >
+                                <div>
+                                  <p className="font-bold text-slate-900">{st.name}</p>
+                                  <p className="text-[11px] font-mono text-slate-500">
+                                    Key: <span className="font-semibold text-red-900">{st.studentKey}</span>
+                                    {st.prevClassLabel}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                    isHighlighted ? 'bg-sais-red text-white' : 'bg-slate-100 text-slate-700'
+                                  }`}
+                                >
+                                  Select
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <div className="p-3 text-center text-xs text-slate-500 italic" role="status">
+                            No students found matching "{existingSearchQuery.trim()}"
+                          </div>
+                        )}
                       </div>
                     )}
 

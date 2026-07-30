@@ -215,6 +215,23 @@ export function useStudentRegistryLogic(state: StudentRegistryState) {
 
       if (!targetId) return prev;
 
+      if (patch.studentId) {
+        const newRoll = patch.studentId.trim().toUpperCase();
+        const targetEnr = prev.find((en) => en.id === targetId);
+        if (targetEnr) {
+          const isConflict = prev.some(
+            (en) =>
+              en.id !== targetId &&
+              en.classId === targetEnr.classId &&
+              en.academicYear === targetEnr.academicYear &&
+              en.rollNumber === newRoll
+          );
+          if (isConflict) {
+            throw new Error(`Roll number ${newRoll} is already in use in this class stream.`);
+          }
+        }
+      }
+
       return prev.map((en) => {
         if (en.id !== targetId) return en;
         return {
@@ -222,7 +239,7 @@ export function useStudentRegistryLogic(state: StudentRegistryState) {
           ...(patch.attendance !== undefined ? { attendance: patch.attendance } : {}),
           ...(patch.index !== undefined ? { index: patch.index } : {}),
           ...(patch.studentId !== undefined
-            ? { studentId: patch.studentId, rollNumber: patch.studentId }
+            ? { studentId: patch.studentId.trim().toUpperCase(), rollNumber: patch.studentId.trim().toUpperCase() }
             : {}),
           ...(patch.enrolledTerms !== undefined ? { enrolledTerms: patch.enrolledTerms } : {}),
         };

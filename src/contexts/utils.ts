@@ -140,6 +140,11 @@ export function termKeyFromSettings(settings: ClassSettings): string {
 }
 
 import { HISTORICAL_YEAR5A_SCORES, HISTORICAL_YEAR5A_SUMMARIES } from '../data/year5aHistoricalData';
+import { HISTORICAL_YEAR6_SCORES, HISTORICAL_YEAR6_SUMMARIES } from '../data/year6HistoricalData';
+import { HISTORICAL_YEAR3_SCORES, HISTORICAL_YEAR3_SUMMARIES } from '../data/year3HistoricalData';
+import { HISTORICAL_YEAR1_SCORES, HISTORICAL_YEAR1_SUMMARIES } from '../data/year1HistoricalData';
+import { HISTORICAL_YEAR2_SCORES, HISTORICAL_YEAR2_SUMMARIES } from '../data/year2HistoricalData';
+import { HISTORICAL_YEAR7_SCORES, HISTORICAL_YEAR7_SUMMARIES } from '../data/year7HistoricalData';
 
 export function normalizeStudentIdToKey(id?: string): string {
   if (!id) return '';
@@ -346,14 +351,16 @@ export function applyLegacyMigration(snap: SaisSnapshot): SaisSnapshot {
     scoreMap.set(key, cleanScore);
   }
 
-  for (const hs of HISTORICAL_YEAR5A_SCORES) {
+  for (const hs of [...HISTORICAL_YEAR5A_SCORES, ...HISTORICAL_YEAR6_SCORES, ...HISTORICAL_YEAR3_SCORES, ...HISTORICAL_YEAR1_SCORES, ...HISTORICAL_YEAR2_SCORES, ...HISTORICAL_YEAR7_SCORES]) {
     const cleanStudentId = normalizeStudentIdToKey(hs.studentId);
     const cleanScore: AssessmentScore = {
       ...hs,
       studentId: cleanStudentId,
     };
     const key = `${cleanStudentId}|${cleanScore.subjectCode}|${cleanScore.mode}|${cleanScore.termKey}`;
-    scoreMap.set(key, cleanScore);
+    if (!scoreMap.has(key)) {
+      scoreMap.set(key, cleanScore);
+    }
   }
   const scores = Array.from(scoreMap.values());
 
@@ -368,14 +375,16 @@ export function applyLegacyMigration(snap: SaisSnapshot): SaisSnapshot {
     summaryMap.set(key, cleanSum);
   }
 
-  for (const hsum of HISTORICAL_YEAR5A_SUMMARIES) {
+  for (const hsum of [...HISTORICAL_YEAR5A_SUMMARIES, ...HISTORICAL_YEAR6_SUMMARIES, ...HISTORICAL_YEAR3_SUMMARIES, ...HISTORICAL_YEAR1_SUMMARIES, ...HISTORICAL_YEAR2_SUMMARIES, ...HISTORICAL_YEAR7_SUMMARIES]) {
     const cleanStudentId = normalizeStudentIdToKey(hsum.studentId);
     const cleanSum: ReportSummary = {
       ...hsum,
       studentId: cleanStudentId,
     };
     const key = `${cleanStudentId}|${cleanSum.academicYear}|${cleanSum.termKey}|${cleanSum.mode}`;
-    summaryMap.set(key, cleanSum);
+    if (!summaryMap.has(key)) {
+      summaryMap.set(key, cleanSum);
+    }
   }
   const summaries = Array.from(summaryMap.values());
 

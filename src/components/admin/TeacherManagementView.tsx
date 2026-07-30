@@ -22,6 +22,7 @@ export default function TeacherManagementView() {
   const [newPassword, setNewPassword] = useState('');
   const [newSubjects, setNewSubjects] = useState<string[]>([]);
   const [newStatus, setNewStatus] = useState<'active' | 'inactive'>('active');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   // Edit Teacher Specializations state
@@ -93,68 +94,73 @@ export default function TeacherManagementView() {
 
   const handleCreateTeacher = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFullName.trim() || !newEmail.trim()) return;
+    if (!newFullName.trim() || !newEmail.trim() || isSubmitting) return;
 
+    setIsSubmitting(true);
     setAuthError(null);
     const email = newEmail.trim().toLowerCase();
     const password = newPassword.trim() || 'sais1234';
 
     let firebaseAuthUid: string | undefined = undefined;
 
-    // Create Firebase Auth user via secondary app instance to preserve current admin session
-    if (firebaseConfig && firebaseConfig.apiKey) {
-      const appName = `SecondaryAuthApp_${Date.now()}`;
-      let secondaryApp;
-      try {
-        secondaryApp = initializeApp(firebaseConfig, appName);
-        const secondaryAuth = getAuth(secondaryApp);
-        const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-        firebaseAuthUid = userCred.user.uid;
-      } catch (err: any) {
-        console.warn('Secondary Firebase Auth creation note:', err?.message || err);
-        const code = err?.code || '';
-        let msg = 'Failed to register authentication credentials.';
-        if (code === 'auth/email-already-in-use') {
-          msg = 'This email address is already in use by another account.';
-        } else if (code === 'auth/weak-password') {
-          msg = 'Password is too weak. Please use at least 6 characters.';
-        } else if (code === 'auth/invalid-email') {
-          msg = 'Invalid email address format.';
-        } else if (err?.message) {
-          msg = err.message;
-        }
-        setAuthError(msg);
-        return; // ABORT creation: do NOT proceed to addTeacher if Firebase Auth fails
-      } finally {
-        if (secondaryApp) {
-          try {
-            await deleteApp(secondaryApp);
-          } catch (e) {
-            // Ignore cleanup error
+    try {
+      // Create Firebase Auth user via secondary app instance to preserve current admin session
+      if (firebaseConfig && firebaseConfig.apiKey) {
+        const appName = `SecondaryAuthApp_${Date.now()}`;
+        let secondaryApp;
+        try {
+          secondaryApp = initializeApp(firebaseConfig, appName);
+          const secondaryAuth = getAuth(secondaryApp);
+          const userCred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+          firebaseAuthUid = userCred.user.uid;
+        } catch (err: any) {
+          console.warn('Secondary Firebase Auth creation note:', err?.message || err);
+          const code = err?.code || '';
+          let msg = 'Failed to register authentication credentials.';
+          if (code === 'auth/email-already-in-use') {
+            msg = 'This email address is already in use by another account.';
+          } else if (code === 'auth/weak-password') {
+            msg = 'Password is too weak. Please use at least 6 characters.';
+          } else if (code === 'auth/invalid-email') {
+            msg = 'Invalid email address format.';
+          } else if (err?.message) {
+            msg = err.message;
+          }
+          setAuthError(msg);
+          return; // ABORT creation: do NOT proceed to addTeacher if Firebase Auth fails
+        } finally {
+          if (secondaryApp) {
+            try {
+              await deleteApp(secondaryApp);
+            } catch (e) {
+              // Ignore cleanup error
+            }
           }
         }
       }
+
+      addTeacher({
+        name: newFullName.trim(),
+        email,
+        phone: newPhone.trim(),
+        password,
+        status: newStatus,
+        schoolId,
+        subjects: newSubjects.sort((a, b) => a.localeCompare(b)),
+        ...(firebaseAuthUid ? { id: firebaseAuthUid } : {}),
+      });
+
+      setIsAddModalOpen(false);
+      setNewFullName('');
+      setNewEmail('');
+      setNewPhone('');
+      setNewPassword('');
+      setNewSubjects([]);
+      setNewStatus('active');
+      setAuthError(null);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    addTeacher({
-      name: newFullName.trim(),
-      email,
-      phone: newPhone.trim(),
-      password,
-      status: newStatus,
-      schoolId,
-      subjects: newSubjects.sort((a, b) => a.localeCompare(b)),
-      ...(firebaseAuthUid ? { id: firebaseAuthUid } : {}),
-    });
-
-    setIsAddModalOpen(false);
-    setNewFullName('');
-    setNewEmail('');
-    setNewPhone('');
-    setNewPassword('');
-    setNewSubjects([]);
-    setNewStatus('active');
-    setAuthError(null);
   };
 
   const handleOpenEdit = (t: User) => {
@@ -422,9 +428,17 @@ export default function TeacherManagementView() {
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-sais-red text-white px-4 py-2 text-xs font-semibold hover:bg-sais-red-dark shadow-xs"
+              disabled={isSubmitting}
+              className="rounded-lg bg-sais-red text-white px-4 py-2 text-xs font-semibold hover:bg-sais-red-dark shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 min-h-[44px] cursor-pointer"
             >
-              Register Staff Account
+              {isSubmitting ? (
+                <>
+                  <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent" />
+                  <span>Registering...</span>
+                </>
+              ) : (
+                <span>Register Staff Account</span>
+              )}
             </button>
           </div>
         </form>

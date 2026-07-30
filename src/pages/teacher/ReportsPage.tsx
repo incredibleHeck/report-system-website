@@ -337,44 +337,7 @@ export default function ReportsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2.5 items-center">
-          {/* Academic Year Selector */}
-          <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Year:</span>
-            <select
-              className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
-              value={selectedAcademicYearId}
-              onChange={(e) => setSelectedAcademicYearId(e.target.value)}
-              disabled={busy}
-            >
-              <option value="2026/2027">2026/2027 (Active Pointer)</option>
-              <option value="2025/2026">2025/2026 (Archived)</option>
-              <option value="2024/2025">2024/2025 (Archived)</option>
-              <option value="2023/2024">2023/2024 (Archived)</option>
-              <option value="2022/2023">2022/2023 (Archived)</option>
-              <option value="2021/2022">2021/2022 (Archived)</option>
-            </select>
-          </div>
 
-          {/* Active Class Selector */}
-          <div className="flex items-center gap-1.5 bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Class:</span>
-            <select
-              className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer min-w-[120px]"
-              value={activeClass?.id || ''}
-              onChange={(e) => setActiveClassId(e.target.value)}
-              disabled={busy}
-            >
-              {displayStreams.length === 0 ? (
-                <option value="">No streams in {selectedAcademicYearId}</option>
-              ) : (
-                displayStreams.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.programme})
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
 
           {/* Term Selector */}
           <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs shadow-2xs">
